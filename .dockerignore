@@ -1,0 +1,57 @@
+# ---- Build artifacts ----
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# ---- Go specific ----
+/vendor
+/go/pkg
+/go/bin
+/go/src
+*.mod~
+*.sum~
+coverage.out
+
+# ---- Logs ----
+*.log
+log/
+logs/
+
+# ---- Temporary files ----
+*.tmp
+*.swp
+*.swo
+*.bak
+*.old
+*.DS_Store
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+*.iml
+.history/
+
+# ---- Git ----
+.git
+.gitignore
+
+# ---- Docker ----
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# ---- Local config / secrets ----
+.env
+*.local
+.env.*
+config.yaml
+secrets.json
+
+# ---- Test data ----
+testdata/
+tmp/
