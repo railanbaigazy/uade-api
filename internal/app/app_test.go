@@ -5,11 +5,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jmoiron/sqlx"
+	"github.com/railanbaigazy/uade-api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSetupRoutes(t *testing.T) {
-	a := New(nil)
+	cfg := &config.Config{JWTSecret: "test-secret"}
+	db := &sqlx.DB{} // пустой объект без подключения
+
+	a := New(db, cfg)
 	mux := a.SetupRoutes()
 
 	tests := []struct {
