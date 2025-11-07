@@ -6,11 +6,9 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/jmoiron/sqlx"
-	"github.com/railanbaigazy/uade-api/internal/app/models"
 	"github.com/railanbaigazy/uade-api/internal/config"
+	"github.com/railanbaigazy/uade-api/internal/utils"
 )
 
 type AuthHandler struct {
@@ -23,61 +21,85 @@ func NewAuthHandler(db *sqlx.DB, cfg *config.Config) *AuthHandler {
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var input struct {
+	var req struct {
 		Name     string `json:"name"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-	query := `INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3)
-			  RETURNING id, role, state, created_at`
-	var user models.User
-	err := h.DB.QueryRowx(query, input.Name, input.Email, string(hashed)).
-		Scan(&user.ID, &user.Role, &user.State, &user.CreatedAt)
+	// password hashing
+	hash, err := utils.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = h.DB.Exec(`
+		INSERT INTO users (name, email, password_hash)
+		VALUES ($1, $2, $3)
+	`, req.Name, req.Email, hash)
+
 	if err != nil {
 		http.Error(w, "Cannot create user", http.StatusInternalServerError)
 		return
 	}
-	user.Name = input.Name
-	user.Email = input.Email
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"status": "ok"}`))
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var input struct {
+	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	var user models.User
-	err := h.DB.Get(&user, "SELECT * FROM users WHERE email=$1", input.Email)
+	var user struct {
+		ID           int    `db:"id"`
+		Name         string `db:"name"`
+		Email        string `db:"email"`
+		PasswordHash string `db:"password_hash"`
+		Role         string `db:"role"`
+	}
+
+	err := h.DB.Get(&user, "SELECT * FROM users WHERE email=$1", req.Email)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)) != nil {
-		http.Error(w, "Invalid password", http.StatusUnauthorized)
+	if !utils.CheckPassword(user.PasswordHash, req.Password) {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	// generate JWT token
+	claims := jwt.MapClaims{
 		"user_id": user.ID,
+		"email":   user.Email,
 		"role":    user.Role,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
-	})
-	tokenStr, _ := token.SignedString([]byte(h.Cfg.JWTSecret))
+		"exp":     time.Now().Add(24 * time.Hour).Unix(), // срок действия 24 часа
+	}
 
-	json.NewEncoder(w).Encode(map[string]string{"token": tokenStr})
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(h.Cfg.JWTSecret))
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": tokenString,
+	})
 }
