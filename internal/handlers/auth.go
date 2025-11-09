@@ -30,7 +30,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🧩 Хэшируем пароль перед сохранением
 	hashedPassword, err := utils.HashPassword(input.Password)
 	if err != nil {
 		http.Error(w, "failed to hash password", http.StatusInternalServerError)
@@ -68,13 +67,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ✅ Используем CheckPassword(hash, password)
 	if !utils.CheckPassword(storedHash, input.Password) {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// 🧠 Генерация токена (если у тебя есть utils/jwt.go)
 	token, err := utils.GenerateJWT(userID, h.Cfg.JWTSecret)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -83,5 +80,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+	if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

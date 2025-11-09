@@ -17,8 +17,12 @@ import (
 func setupDBUser(t *testing.T) *sqlx.DB {
 	db, err := sqlx.Connect("postgres", "postgres://user:password@localhost:5430/uade?sslmode=disable")
 	require.NoError(t, err)
-	db.Exec(`TRUNCATE users RESTART IDENTITY CASCADE;`)
-	db.Exec(`INSERT INTO users (name, email, password_hash) VALUES ('Test','me@example.com','x');`)
+	if _, err := db.Exec(`TRUNCATE users RESTART IDENTITY CASCADE;`); err != nil {
+		t.Fatalf("Failed to truncate users: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO users (name, email, password_hash) VALUES ('Test','me@example.com','x');`); err != nil {
+		t.Fatalf("Failed to insert user: %v", err)
+	}
 	return db
 }
 
@@ -45,6 +49,8 @@ func TestProfileHandler(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var user map[string]interface{}
-	json.NewDecoder(rec.Body).Decode(&user)
+	if err := json.NewDecoder(rec.Body).Decode(&user); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
 	require.Equal(t, "me@example.com", user["email"])
 }
