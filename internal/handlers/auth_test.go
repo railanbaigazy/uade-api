@@ -76,7 +76,6 @@ func TestRegisterAndLogin_SQLMock(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, float64(1), claims["user_id"])
 
-
 	err = mock.ExpectationsWereMet()
 	require.NoError(t, err)
 }
