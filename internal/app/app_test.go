@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -13,10 +14,14 @@ import (
 )
 
 func setupTestApp(t *testing.T) *http.ServeMux {
-	db, err := sqlx.Connect("postgres", "postgres://user:password@localhost:5430/uade?sslmode=disable")
+	os.Setenv("DATABASE_URL", "postgres://user:password@localhost:5430/uade?sslmode=disable")
+	os.Setenv("JWT_SECRET", "test-secret-key")
+
+	cfg := config.Load()
+
+	db, err := sqlx.Connect("postgres", cfg.DBURL)
 	require.NoError(t, err)
 
-	cfg := &config.Config{JWTSecret: "test-secret"}
 	a := New(db, cfg)
 	return a.SetupRoutes()
 }
@@ -47,7 +52,7 @@ func TestSetupRoutes(t *testing.T) {
 			mux.ServeHTTP(rec, req)
 
 			t.Logf("[%s] %s -> %d", tt.method, tt.path, rec.Code)
-			// allow register to return 201 (created) or 409 (email already exists) in case tests rerun
+
 			if tt.path == "/api/auth/register" {
 				if !(rec.Code == http.StatusCreated || rec.Code == http.StatusConflict) {
 					require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())

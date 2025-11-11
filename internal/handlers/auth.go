@@ -17,13 +17,6 @@ type AuthHandler struct {
 	Cfg *config.Config
 }
 
-// helper for JSON error responses
-func writeJSONError(w http.ResponseWriter, msg string, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
 func NewAuthHandler(db *sqlx.DB, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{DB: db, Cfg: cfg}
 }
@@ -44,23 +37,23 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Email = strings.TrimSpace(input.Email)
 	if input.Name == "" {
-		writeJSONError(w, "name is required", http.StatusBadRequest)
+		utils.WriteJSONError(w, "name is required", http.StatusBadRequest)
 		return
 	}
 	if input.Email == "" {
-		writeJSONError(w, "email is required", http.StatusBadRequest)
+		utils.WriteJSONError(w, "email is required", http.StatusBadRequest)
 		return
 	}
 	if _, err := mail.ParseAddress(input.Email); err != nil {
-		writeJSONError(w, "email is invalid", http.StatusBadRequest)
+		utils.WriteJSONError(w, "email is invalid", http.StatusBadRequest)
 		return
 	}
 	if input.Password == "" {
-		writeJSONError(w, "password is required", http.StatusBadRequest)
+		utils.WriteJSONError(w, "password is required", http.StatusBadRequest)
 		return
 	}
 	if len(input.Password) < 6 {
-		writeJSONError(w, "password must be at least 6 characters", http.StatusBadRequest)
+		utils.WriteJSONError(w, "password must be at least 6 characters", http.StatusBadRequest)
 		return
 	}
 
@@ -78,11 +71,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		// handle unique constraint violation for email
 		if pqErr, ok := err.(*pq.Error); ok {
 			if pqErr.Code == "23505" {
-				writeJSONError(w, "email already exists", http.StatusConflict)
+				utils.WriteJSONError(w, "email already exists", http.StatusConflict)
 				return
 			}
 		}
-		writeJSONError(w, "cannot create user", http.StatusInternalServerError)
+		utils.WriteJSONError(w, "cannot create user", http.StatusInternalServerError)
 		return
 	}
 
@@ -103,15 +96,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Basic validations for login
 	input.Email = strings.TrimSpace(input.Email)
 	if input.Email == "" {
-		writeJSONError(w, "email is required", http.StatusBadRequest)
+		utils.WriteJSONError(w, "email is required", http.StatusBadRequest)
 		return
 	}
 	if _, err := mail.ParseAddress(input.Email); err != nil {
-		writeJSONError(w, "email is invalid", http.StatusBadRequest)
+		utils.WriteJSONError(w, "email is invalid", http.StatusBadRequest)
 		return
 	}
 	if input.Password == "" {
-		writeJSONError(w, "password is required", http.StatusBadRequest)
+		utils.WriteJSONError(w, "password is required", http.StatusBadRequest)
 		return
 	}
 
@@ -119,25 +112,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var userID int
 	err := h.DB.QueryRow("SELECT id, password_hash FROM users WHERE email=$1", input.Email).Scan(&userID, &storedHash)
 	if err != nil {
-		writeJSONError(w, "invalid credentials", http.StatusUnauthorized)
+		utils.WriteJSONError(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	if !utils.CheckPassword(storedHash, input.Password) {
-		writeJSONError(w, "invalid credentials", http.StatusUnauthorized)
+		utils.WriteJSONError(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	token, err := utils.GenerateJWT(userID, h.Cfg.JWTSecret)
 	if err != nil {
-		writeJSONError(w, "failed to generate token", http.StatusInternalServerError)
+		utils.WriteJSONError(w, "failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	utils.WriteJSON(w, map[string]string{"token": token}, http.StatusOK)
 }

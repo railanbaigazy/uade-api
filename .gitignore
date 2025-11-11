@@ -18,6 +18,10 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 vendor/
 
+# Environment variables - do NOT commit secrets
+.env
+.env.local
+.env.*.local
 # Go workspace file
 go.work
 go.work.sum

@@ -29,7 +29,7 @@ func (a *App) SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 
-	mux.Handle("/api/users/me", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(userHandler.Profile)))
+	mux.Handle("GET /api/users/me", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(userHandler.Profile)))
 
 	return mux
 }

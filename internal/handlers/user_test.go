@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Option 1: Unit test using sqlmock (no real DB required)
-func TestProfileHandler_UnitTest(t *testing.T) {
+// Unit test using sqlmock (no real DB required)
+func TestProfileHandler(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
@@ -54,7 +54,7 @@ func TestProfileHandler_UnitTest(t *testing.T) {
 	require.NoError(t, err, "not all database expectations were met")
 }
 
-// Option 2: Integration test with full JWT middleware
+// Integration test with full JWT middleware
 func TestProfileHandler_WithMiddleware(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

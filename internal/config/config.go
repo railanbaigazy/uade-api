@@ -14,7 +14,6 @@ type Config struct {
 	JWTSecret string
 }
 
-// Load загружает конфигурацию из .env или окружения
 func Load() *Config {
 	if err := godotenv.Load(); err != nil {
 		log.Println(".env file not found (ignore this if run within CI/CD or docker-compose)")
@@ -40,7 +39,7 @@ func Load() *Config {
 		log.Fatal("JWT_SECRET not set in .env")
 	}
 
-	log.Printf("✅ Loaded config for %s environment", env)
+	log.Printf("Loaded config for %s environment", env)
 
 	return &Config{
 		DBURL:     dbURL,
