@@ -74,6 +74,7 @@ jobs:
     env:
       DATABASE_URL: postgres://test_user:test_pass@localhost:5432/uade_test?sslmode=disable
       APP_ENV: test
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
     steps:
       - uses: actions/checkout@v5
