@@ -29,7 +29,6 @@ func (a *App) SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 
-	// JWT middleware
 	mux.Handle("/api/users/me", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(userHandler.Profile)))
 
 	return mux

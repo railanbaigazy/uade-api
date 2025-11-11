@@ -1,56 +1,184 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
-	"github.com/railanbaigazy/uade-api/internal/config"
+	"github.com/railanbaigazy/uade-api/internal/app/middleware"
+	"github.com/railanbaigazy/uade-api/internal/app/models"
 	"github.com/stretchr/testify/require"
 )
 
-func setupDBUser(t *testing.T) *sqlx.DB {
-	db, err := sqlx.Connect("postgres", "postgres://user:password@localhost:5430/uade?sslmode=disable")
+// Option 1: Unit test using sqlmock (no real DB required)
+func TestProfileHandler_UnitTest(t *testing.T) {
+	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	if _, err := db.Exec(`TRUNCATE users RESTART IDENTITY CASCADE;`); err != nil {
-		t.Fatalf("Failed to truncate users: %v", err)
-	}
-	if _, err := db.Exec(`INSERT INTO users (name, email, password_hash) VALUES ('Test','me@example.com','x');`); err != nil {
-		t.Fatalf("Failed to insert user: %v", err)
-	}
-	return db
-}
-
-func TestProfileHandler(t *testing.T) {
-	db := setupDBUser(t)
 	defer db.Close()
 
-	cfg := &config.Config{JWTSecret: "test-secret"}
-	h := NewUserHandler(db)
+	sqlxDB := sqlx.NewDb(db, "sqlmock")
 
-	// создаём тестовый токен
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": 1,
-		"exp":     time.Now().Add(time.Hour).Unix(),
-	})
-	tokenStr, _ := token.SignedString([]byte(cfg.JWTSecret))
+	// Mock the SELECT query
+	rows := sqlmock.NewRows([]string{"id", "name", "email", "role", "state", "created_at"}).
+		AddRow(1, "Test User", "me@example.com", "user", "active", time.Now())
 
+	mock.ExpectQuery("SELECT id, name, email, role, state, created_at FROM users WHERE id=\\$1").
+		WithArgs("1").
+		WillReturnRows(rows)
+
+	h := NewUserHandler(sqlxDB)
+
+	// Simulate the middleware setting X-User-ID header
 	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
-	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	req.Header.Set("X-User-ID", "1")
 
 	rec := httptest.NewRecorder()
 	h.Profile(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	var user map[string]interface{}
-	if err := json.NewDecoder(rec.Body).Decode(&user); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
-	require.Equal(t, "me@example.com", user["email"])
+	var user models.User
+	err = json.NewDecoder(rec.Body).Decode(&user)
+	require.NoError(t, err)
+	require.Equal(t, "me@example.com", user.Email)
+	require.Equal(t, int64(1), user.ID)
+
+	// Verify all expectations were met
+	err = mock.ExpectationsWereMet()
+	require.NoError(t, err, "not all database expectations were met")
+}
+
+// Option 2: Integration test with full JWT middleware
+func TestProfileHandler_WithMiddleware(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	sqlxDB := sqlx.NewDb(db, "sqlmock")
+
+	// Mock the SELECT query
+	rows := sqlmock.NewRows([]string{"id", "name", "email", "role", "state", "created_at"}).
+		AddRow(42, "John Doe", "john@example.com", "user", "active", time.Now())
+
+	mock.ExpectQuery("SELECT id, name, email, role, state, created_at FROM users WHERE id=\\$1").
+		WithArgs("42").
+		WillReturnRows(rows)
+
+	h := NewUserHandler(sqlxDB)
+	secret := "test-secret-key"
+
+	// Create a valid JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": 42,
+		"exp":     time.Now().Add(time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	})
+	tokenStr, err := token.SignedString([]byte(secret))
+	require.NoError(t, err)
+
+	// Create the request with Authorization header
+	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+
+	// Wrap handler with JWT middleware
+	wrappedHandler := middleware.JWTAuth(secret, http.HandlerFunc(h.Profile))
+
+	rec := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "expected 200 status, got %d: %s", rec.Code, rec.Body.String())
+
+	var user models.User
+	err = json.NewDecoder(rec.Body).Decode(&user)
+	require.NoError(t, err)
+	require.Equal(t, "john@example.com", user.Email)
+	require.Equal(t, int64(42), user.ID)
+
+	// Verify all mock expectations were met
+	err = mock.ExpectationsWereMet()
+	require.NoError(t, err, "not all database expectations were met")
+}
+
+// Test: Missing Authorization header
+func TestProfileHandler_MissingAuth(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	sqlxDB := sqlx.NewDb(db, "sqlmock")
+	h := NewUserHandler(sqlxDB)
+	secret := "test-secret"
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
+	// No Authorization header
+
+	wrappedHandler := middleware.JWTAuth(secret, http.HandlerFunc(h.Profile))
+
+	rec := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Contains(t, rec.Body.String(), "Missing token")
+}
+
+// Test: Invalid JWT token
+func TestProfileHandler_InvalidToken(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	sqlxDB := sqlx.NewDb(db, "sqlmock")
+	h := NewUserHandler(sqlxDB)
+	secret := "test-secret"
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
+	req.Header.Set("Authorization", "Bearer invalid.token.here")
+
+	wrappedHandler := middleware.JWTAuth(secret, http.HandlerFunc(h.Profile))
+
+	rec := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Contains(t, rec.Body.String(), "Unauthorized")
+}
+
+// Test: User not found
+func TestProfileHandler_UserNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	sqlxDB := sqlx.NewDb(db, "sqlmock")
+
+	// Mock query returns no rows
+	mock.ExpectQuery("SELECT id, name, email, role, state, created_at FROM users WHERE id=\\$1").
+		WithArgs("999").
+		WillReturnError(sql.ErrNoRows)
+
+	h := NewUserHandler(sqlxDB)
+	secret := "test-secret"
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": 999,
+		"exp":     time.Now().Add(time.Hour).Unix(),
+	})
+	tokenStr, _ := token.SignedString([]byte(secret))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+
+	wrappedHandler := middleware.JWTAuth(secret, http.HandlerFunc(h.Profile))
+
+	rec := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Contains(t, rec.Body.String(), "User not found")
 }
