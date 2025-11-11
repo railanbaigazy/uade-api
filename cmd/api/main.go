@@ -25,7 +25,7 @@ func main() {
 		log.Fatal("❌ Database not reachable:", err)
 	}
 
-	a := app.New(db, cfg) // ✅ теперь два аргумента
+	a := app.New(db, cfg)
 	mux := a.SetupRoutes()
 
 	fmt.Println("🚀 Uade API running on port:", cfg.Port)
