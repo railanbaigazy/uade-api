@@ -22,18 +22,18 @@ func JWTAuth(secret string, next http.Handler) http.Handler {
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 			return []byte(secret), nil
 		})
-	if err != nil || !token.Valid {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+		if err != nil || !token.Valid {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
-	// ensure the signing method is what we expect to avoid alg substitution attacks
-	if token.Method != jwt.SigningMethodHS256 {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+		// ensure the signing method is what we expect to avoid alg substitution attacks
+		if token.Method != jwt.SigningMethodHS256 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
-	r.Header.Set("X-User-ID", fmt.Sprintf("%v", claims["user_id"]))
-	next.ServeHTTP(w, r)
+		r.Header.Set("X-User-ID", fmt.Sprintf("%v", claims["user_id"]))
+		next.ServeHTTP(w, r)
 	})
 }

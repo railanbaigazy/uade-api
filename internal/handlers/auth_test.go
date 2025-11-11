@@ -74,10 +74,9 @@ func TestRegisterAndLogin_SQLMock(t *testing.T) {
 	require.True(t, parsed.Valid)
 	claims, ok := parsed.Claims.(jwt.MapClaims)
 	require.True(t, ok)
-	// note: jwt library unmarshals numeric types as float64
 	require.Equal(t, float64(1), claims["user_id"])
 
-	// ensure all expectations were met
+
 	err = mock.ExpectationsWereMet()
 	require.NoError(t, err)
 }

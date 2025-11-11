@@ -22,11 +22,11 @@ func TestHashPassword_ErrorHandling(t *testing.T) {
 	}
 
 	hash, err := HashPassword(veryLongPassword)
-	
+
 	require.Error(t, err, "should return error for password > 72 bytes")
-	
+
 	require.Empty(t, hash, "hash should be empty when error occurs")
-	
+
 	require.Contains(t, err.Error(), "password length exceeds 72 bytes")
 }
 
@@ -52,7 +52,6 @@ func TestHashPassword_RandomSalt(t *testing.T) {
 	require.True(t, CheckPassword(hash2, password))
 }
 
-
 func TestHashPassword_SpecialCharacters(t *testing.T) {
 	specialPassword := "p@$$wÖrd!#$%^&*()"
 	hash, err := HashPassword(specialPassword)
@@ -60,5 +59,5 @@ func TestHashPassword_SpecialCharacters(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, hash)
 	require.True(t, CheckPassword(hash, specialPassword))
-	require.False(t, CheckPassword(hash, "p@$$word!#$%^&*()")) 
+	require.False(t, CheckPassword(hash, "p@$$word!#$%^&*()"))
 }
