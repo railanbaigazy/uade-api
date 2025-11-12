@@ -37,10 +37,14 @@ make test
 
 ### Setting up environment
 
-Create a .env file:
+Create a .env file from template
+
+Content of `.env`:
 
 ```
 DATABASE_URL=postgres://user:password@localhost:5430/uade?sslmode=disable
+JWT_SECRET=your-super-secret-key-change-in-production
+APP_ENV=development
 PORT=8080
 ```
 
@@ -49,6 +53,7 @@ PORT=8080
 ```bash
 make run
 ```
+
 
 ### Testing locally
 

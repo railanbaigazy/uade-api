@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	DBURL string
-	Port  string
-	Env   string
+	DBURL     string
+	Port      string
+	Env       string
+	JWTSecret string
 }
 
 func Load() *Config {
@@ -33,11 +34,17 @@ func Load() *Config {
 		env = "development"
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET not set in .env")
+	}
+
 	log.Printf("Loaded config for %s environment", env)
 
 	return &Config{
-		DBURL: dbURL,
-		Port:  port,
-		Env:   env,
+		DBURL:     dbURL,
+		Port:      port,
+		Env:       env,
+		JWTSecret: jwtSecret,
 	}
 }
