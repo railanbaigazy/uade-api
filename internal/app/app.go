@@ -25,11 +25,18 @@ func (a *App) SetupRoutes() *http.ServeMux {
 
 	authHandler := handlers.NewAuthHandler(a.DB, a.Cfg)
 	userHandler := handlers.NewUserHandler(a.DB)
+	postHandler := handlers.NewPostHandler(a.DB)
 
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 
 	mux.Handle("GET /api/users/me", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(userHandler.Profile)))
+
+	// POSTS CRUD
+	mux.Handle("GET /api/posts", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(postHandler.GetAll)))
+	mux.Handle("POST /api/posts", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(postHandler.Create)))
+	mux.Handle("PUT /api/posts/{id}", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(postHandler.Update)))
+	mux.Handle("DELETE /api/posts/{id}", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(postHandler.Delete)))
 
 	return mux
 }

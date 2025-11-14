@@ -25,7 +25,7 @@ services:
     ports:
       - "5430:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d uade"]
+      test: [ "CMD-SHELL", "pg_isready -U user -d uade" ]
       interval: 5s
       timeout: 3s
       retries: 5
