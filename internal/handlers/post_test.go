@@ -23,7 +23,7 @@ func TestPostHandler_GetAll_Success(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "title", "content", "author_id", "created_at"}).
 		AddRow(1, "Hello", "World", 10, time.Now())
 
-	mock.ExpectQuery(`SELECT id, title, content, author_id, created_at FROM posts`).
+	mock.ExpectQuery(`SELECT id, title, content, type, author_id, created_at FROM posts`).
 		WillReturnRows(rows)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/posts", nil)
@@ -45,7 +45,7 @@ func TestPostHandler_GetAll_DBError(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
 	h := NewPostHandler(db)
 
-	mock.ExpectQuery(`SELECT id, title, content, author_id, created_at FROM posts`).
+	mock.ExpectQuery(`SELECT id, title, content, type, author_id, created_at FROM posts`).
 		WillReturnError(sql.ErrConnDone)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/posts", nil)
@@ -60,7 +60,6 @@ func TestPostHandler_GetAll_DBError(t *testing.T) {
 }
 
 // Create
-
 func TestPostHandler_Create_BadJSON(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
 	h := NewPostHandler(db)
@@ -78,7 +77,7 @@ func TestPostHandler_Create_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
 	h := NewPostHandler(db)
 
-	body := `{"title": "Test", "content": "Content"}`
+	body := `{"title": "Test", "content": "Content", "type": "lend"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/posts", strings.NewReader(body))
 	req.Header.Set("X-User-ID", "5")
 
@@ -86,7 +85,7 @@ func TestPostHandler_Create_Success(t *testing.T) {
 		AddRow(10, time.Now())
 
 	mock.ExpectQuery(`INSERT INTO posts`).
-		WithArgs("Test", "Content", int64(5)).
+		WithArgs("Test", "Content", "lend", int64(5)).
 		WillReturnRows(rows)
 
 	rec := httptest.NewRecorder()

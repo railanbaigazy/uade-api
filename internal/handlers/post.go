@@ -21,7 +21,7 @@ func NewPostHandler(db *sqlx.DB) *PostHandler {
 func (h *PostHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	posts := make([]models.Post, 0)
 
-	query := `SELECT id, title, content, author_id, created_at 
+	query := `SELECT id, title, content, type, author_id, created_at 
 	          FROM posts 
 	          ORDER BY created_at DESC`
 
@@ -46,12 +46,12 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
 
 	query := `
-		INSERT INTO posts (title, content, author_id, created_at)
-		VALUES ($1, $2, $3, NOW())
+		INSERT INTO posts (title, content, type, author_id, created_at)
+		VALUES ($1, $2, $3, $4, NOW())
 		RETURNING id, created_at
 	`
 
-	if err := h.DB.Get(&p, query, p.Title, p.Content, userID); err != nil {
+	if err := h.DB.Get(&p, query, p.Title, p.Content, p.Type, userID); err != nil {
 		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
