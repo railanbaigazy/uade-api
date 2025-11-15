@@ -52,6 +52,19 @@ func TestSetupRoutes(t *testing.T) {
 		{"unauthorized update post", http.MethodPut, "/api/posts/1", `{"title":"x"}`, http.StatusUnauthorized},
 		{"unauthorized delete post", http.MethodDelete, "/api/posts/1", "", http.StatusUnauthorized},
 
+		{"unauthorized get agreements", http.MethodGet, "/api/agreements", "", http.StatusUnauthorized},
+		{"unauthorized get agreement by id", http.MethodGet, "/api/agreements/1", "", http.StatusUnauthorized},
+		{"unauthorized create agreement", http.MethodPost, "/api/agreements",
+			`{"post_id":1,"principal_amount":1000,"interest_rate":0.1,"due_date":"2026-12-31","payment_frequency":"one_time","number_of_payments":1}`,
+			http.StatusUnauthorized,
+		},
+		{"unauthorized accept agreement", http.MethodPost, "/api/agreements/1/accept", "", http.StatusUnauthorized},
+		{"unauthorized cancel agreement", http.MethodPost, "/api/agreements/1/cancel", "", http.StatusUnauthorized},
+		{"unauthorized update contract", http.MethodPut, "/api/agreements/1/contract",
+			`{"contract_url":"https://example.com/contract.pdf","contract_hash":"abc123"}`,
+			http.StatusUnauthorized,
+		},
+
 		{"unknown route", http.MethodGet, "/notfound", "", http.StatusNotFound},
 	}
 
