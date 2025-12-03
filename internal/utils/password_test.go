@@ -31,11 +31,9 @@ func TestHashPassword_ErrorHandling(t *testing.T) {
 }
 
 func TestCheckPassword_InvalidHash(t *testing.T) {
-	// malformed hash should return false (not panic)
 	result := CheckPassword("not-a-valid-bcrypt-hash", "password")
 	require.False(t, result)
 
-	// empty hash should return false
 	result = CheckPassword("", "password")
 	require.False(t, result)
 }

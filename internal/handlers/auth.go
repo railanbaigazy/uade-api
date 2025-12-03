@@ -33,7 +33,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Consolidated validations
 	input.Name = strings.TrimSpace(input.Name)
 	input.Email = strings.TrimSpace(input.Email)
 	if input.Name == "" {
@@ -68,7 +67,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, $3)
 	`, input.Name, input.Email, hashedPassword)
 	if err != nil {
-		// handle unique constraint violation for email
 		if pqErr, ok := err.(*pq.Error); ok {
 			if pqErr.Code == "23505" {
 				utils.WriteJSONError(w, "email already exists", http.StatusConflict)
@@ -93,7 +91,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Basic validations for login
 	input.Email = strings.TrimSpace(input.Email)
 	if input.Email == "" {
 		utils.WriteJSONError(w, "email is required", http.StatusBadRequest)
