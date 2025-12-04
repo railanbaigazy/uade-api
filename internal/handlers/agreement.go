@@ -149,8 +149,8 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 	agreement.NumberOfPayments = input.NumberOfPayments
 	agreement.Status = "pending"
 
-	if h.publisher != nil {
-		_ = h.publisher.Publish(r.Context(), "agreement.created", map[string]any{
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.created", map[string]any{
 			"agreement_id":       agreement.ID,
 			"lender_id":          agreement.LenderID,
 			"borrower_id":        agreement.BorrowerID,
@@ -300,8 +300,8 @@ func (h *AgreementHandler) Accept(w http.ResponseWriter, r *http.Request) {
 	startDate := now
 	agreement.StartDate = &startDate
 
-	if h.publisher != nil {
-		_ = h.publisher.Publish(r.Context(), "agreement.accepted", map[string]any{
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.accepted", map[string]any{
 			"agreement_id": agreement.ID,
 			"lender_id":    agreement.LenderID,
 			"borrower_id":  agreement.BorrowerID,
@@ -352,8 +352,8 @@ func (h *AgreementHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 	agreement.Status = "cancelled"
 
-	if h.publisher != nil {
-		_ = h.publisher.Publish(r.Context(), "agreement.cancelled", map[string]any{
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.cancelled", map[string]any{
 			"agreement_id": agreement.ID,
 			"lender_id":    agreement.LenderID,
 			"borrower_id":  agreement.BorrowerID,
@@ -419,8 +419,8 @@ func (h *AgreementHandler) UpdateContract(w http.ResponseWriter, r *http.Request
 	agreement.ContractURL = &input.ContractURL
 	agreement.ContractHash = &input.ContractHash
 
-	if h.publisher != nil {
-		_ = h.publisher.Publish(r.Context(), "agreement.contract_updated", map[string]any{
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.contract_updated", map[string]any{
 			"agreement_id":  agreement.ID,
 			"post_id":       agreement.PostID,
 			"contract_url":  agreement.ContractURL,
