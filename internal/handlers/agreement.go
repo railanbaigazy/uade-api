@@ -16,7 +16,7 @@ import (
 
 type AgreementHandler struct {
 	DB        *sqlx.DB
-	publisher mq.Publisher
+	Publisher mq.Publisher
 }
 
 func NewAgreementHandler(db *sqlx.DB, publisher mq.Publisher) *AgreementHandler {
