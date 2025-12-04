@@ -22,7 +22,7 @@ type AgreementHandler struct {
 func NewAgreementHandler(db *sqlx.DB, publisher mq.Publisher) *AgreementHandler {
 	return &AgreementHandler{
 		DB:        db,
-		publisher: publisher,
+		Publisher: publisher,
 	}
 }
 
