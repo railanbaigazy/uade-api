@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Unit test using sqlmock (no real DB required)
 func TestProfileHandler(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -24,7 +23,6 @@ func TestProfileHandler(t *testing.T) {
 
 	sqlxDB := sqlx.NewDb(db, "sqlmock")
 
-	// Mock the SELECT query
 	rows := sqlmock.NewRows([]string{"id", "name", "email", "role", "state", "created_at"}).
 		AddRow(1, "Test User", "me@example.com", "user", "active", time.Now())
 
@@ -34,7 +32,6 @@ func TestProfileHandler(t *testing.T) {
 
 	h := NewUserHandler(sqlxDB)
 
-	// Simulate the middleware setting X-User-ID header
 	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
 	req.Header.Set("X-User-ID", "1")
 
@@ -49,12 +46,10 @@ func TestProfileHandler(t *testing.T) {
 	require.Equal(t, "me@example.com", user.Email)
 	require.Equal(t, int64(1), user.ID)
 
-	// Verify all expectations were met
 	err = mock.ExpectationsWereMet()
 	require.NoError(t, err, "not all database expectations were met")
 }
 
-// Integration test with full JWT middleware
 func TestProfileHandler_WithMiddleware(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -62,7 +57,6 @@ func TestProfileHandler_WithMiddleware(t *testing.T) {
 
 	sqlxDB := sqlx.NewDb(db, "sqlmock")
 
-	// Mock the SELECT query
 	rows := sqlmock.NewRows([]string{"id", "name", "email", "role", "state", "created_at"}).
 		AddRow(42, "John Doe", "john@example.com", "user", "active", time.Now())
 
@@ -73,7 +67,6 @@ func TestProfileHandler_WithMiddleware(t *testing.T) {
 	h := NewUserHandler(sqlxDB)
 	secret := "test-secret-key"
 
-	// Create a valid JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": 42,
 		"exp":     time.Now().Add(time.Hour).Unix(),
@@ -82,11 +75,9 @@ func TestProfileHandler_WithMiddleware(t *testing.T) {
 	tokenStr, err := token.SignedString([]byte(secret))
 	require.NoError(t, err)
 
-	// Create the request with Authorization header
 	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenStr)
 
-	// Wrap handler with JWT middleware
 	wrappedHandler := middleware.JWTAuth(secret, http.HandlerFunc(h.Profile))
 
 	rec := httptest.NewRecorder()
@@ -100,12 +91,10 @@ func TestProfileHandler_WithMiddleware(t *testing.T) {
 	require.Equal(t, "john@example.com", user.Email)
 	require.Equal(t, int64(42), user.ID)
 
-	// Verify all mock expectations were met
 	err = mock.ExpectationsWereMet()
 	require.NoError(t, err, "not all database expectations were met")
 }
 
-// Test: Missing Authorization header
 func TestProfileHandler_MissingAuth(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
@@ -116,7 +105,6 @@ func TestProfileHandler_MissingAuth(t *testing.T) {
 	secret := "test-secret"
 
 	req := httptest.NewRequest(http.MethodGet, "/api/users/me", nil)
-	// No Authorization header
 
 	wrappedHandler := middleware.JWTAuth(secret, http.HandlerFunc(h.Profile))
 
@@ -127,7 +115,6 @@ func TestProfileHandler_MissingAuth(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "Missing token")
 }
 
-// Test: Invalid JWT token
 func TestProfileHandler_InvalidToken(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
@@ -149,7 +136,6 @@ func TestProfileHandler_InvalidToken(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "Unauthorized")
 }
 
-// Test: User not found
 func TestProfileHandler_UserNotFound(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -157,7 +143,6 @@ func TestProfileHandler_UserNotFound(t *testing.T) {
 
 	sqlxDB := sqlx.NewDb(db, "sqlmock")
 
-	// Mock query returns no rows
 	mock.ExpectQuery("SELECT id, name, email, role, state, created_at FROM users WHERE id=\\$1").
 		WithArgs("999").
 		WillReturnError(sql.ErrNoRows)

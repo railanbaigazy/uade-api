@@ -8,10 +8,12 @@ import (
 )
 
 type Config struct {
-	DBURL     string
-	Port      string
-	Env       string
-	JWTSecret string
+	DBURL          string
+	Port           string
+	Env            string
+	JWTSecret      string
+	RabbitURL      string
+	RabbitExchange string
 }
 
 func Load() *Config {
@@ -39,12 +41,25 @@ func Load() *Config {
 		log.Fatal("JWT_SECRET not set in .env")
 	}
 
-	log.Printf("Loaded config for %s environment", env)
-
-	return &Config{
+	cfg := &Config{
 		DBURL:     dbURL,
 		Port:      port,
 		Env:       env,
 		JWTSecret: jwtSecret,
 	}
+
+	// RabbitMQ
+	cfg.RabbitURL = os.Getenv("RABBITMQ_URL")
+	if cfg.RabbitURL == "" {
+		cfg.RabbitURL = "amqp://guest:guest@rabbitmq:5672/"
+	}
+
+	cfg.RabbitExchange = os.Getenv("RABBITMQ_EXCHANGE")
+	if cfg.RabbitExchange == "" {
+		cfg.RabbitExchange = "uade.events"
+	}
+
+	log.Printf("Loaded config for %s environment", env)
+
+	return cfg
 }
