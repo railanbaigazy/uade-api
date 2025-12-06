@@ -63,7 +63,6 @@ func TestGenerateJWTTokenValidation(t *testing.T) {
 		t.Fatal("GenerateJWT() returned empty token")
 	}
 
-	// Parse and validate the token
 	parsedToken, err := jwt.ParseWithClaims(token, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
@@ -76,13 +75,11 @@ func TestGenerateJWTTokenValidation(t *testing.T) {
 		t.Fatal("Token is not valid")
 	}
 
-	// Verify claims
 	claims, ok := parsedToken.Claims.(jwt.MapClaims)
 	if !ok {
 		t.Fatal("Failed to extract claims from token")
 	}
 
-	// Check user_id claim
 	extractedUserID, ok := claims["user_id"].(float64)
 	if !ok {
 		t.Fatal("user_id claim is missing or has wrong type")
@@ -92,12 +89,10 @@ func TestGenerateJWTTokenValidation(t *testing.T) {
 		t.Errorf("user_id = %v, want %v", int(extractedUserID), userID)
 	}
 
-	// Check that exp claim exists
 	if _, ok := claims["exp"]; !ok {
 		t.Fatal("exp claim is missing")
 	}
 
-	// Check that iat claim exists
 	if _, ok := claims["iat"]; !ok {
 		t.Fatal("iat claim is missing")
 	}
@@ -118,12 +113,10 @@ func TestGenerateJWTWithDifferentSecrets(t *testing.T) {
 		t.Fatalf("GenerateJWT() error = %v", err)
 	}
 
-	// Tokens should be different
 	if token1 == token2 {
 		t.Error("Tokens generated with different secrets should not be identical")
 	}
 
-	// Token1 should not be valid with secret2
 	_, err = jwt.ParseWithClaims(token1, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret2), nil
 	})
@@ -142,7 +135,6 @@ func TestGenerateJWTTokenStructure(t *testing.T) {
 		t.Fatalf("GenerateJWT() error = %v", err)
 	}
 
-	// Token should be a valid JWT string (contains 3 parts separated by dots)
 	parsedToken, err := jwt.ParseWithClaims(token, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
@@ -150,7 +142,6 @@ func TestGenerateJWTTokenStructure(t *testing.T) {
 		t.Fatalf("Failed to parse token: %v", err)
 	}
 
-	// Verify signing method is HS256
 	if parsedToken.Method.Alg() != "HS256" {
 		t.Errorf("Signing method = %v, want HS256", parsedToken.Method.Alg())
 	}

@@ -11,10 +11,8 @@ import (
 )
 
 func TestJWTAuth(t *testing.T) {
-	// happy path: valid token -> handler called and X-User-ID set
 	secret := "test-secret"
 	handler := JWTAuth(secret, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// echo user id header so test can assert it
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(r.Header.Get("X-User-ID")))
 	}))
@@ -31,7 +29,6 @@ func TestJWTAuth(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
-	// middleware should set X-User-ID to the claim value
 	require.Equal(t, "99", rec.Body.String())
 }
 
@@ -42,7 +39,6 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-	// no Authorization header
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -92,7 +88,6 @@ func TestJWTAuth_WrongSecret(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// token signed with different secret
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": 1,
 		"exp":     time.Now().Add(time.Hour).Unix(),

@@ -27,7 +27,6 @@ func JWTAuth(secret string, next http.Handler) http.Handler {
 			return
 		}
 
-		// ensure the signing method is what we expect to avoid alg substitution attacks
 		if token.Method != jwt.SigningMethodHS256 {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
