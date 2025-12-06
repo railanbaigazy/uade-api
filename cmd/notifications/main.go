@@ -8,15 +8,22 @@ import (
 	"syscall"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/railanbaigazy/uade-api/internal/config"
 )
 
 func main() {
 	log.Println("[notifications] starting...")
 
-	cfg := config.Load()
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	if rabbitURL == "" {
+		rabbitURL = "amqp://guest:guest@rabbitmq:5672/"
+	}
 
-	conn, err := amqp.Dial(cfg.RabbitURL)
+	exchange := os.Getenv("RABBITMQ_EXCHANGE")
+	if exchange == "" {
+		exchange = "uade.events"
+	}
+
+	conn, err := amqp.Dial(rabbitURL)
 	if err != nil {
 		log.Fatalf("[notifications] failed to connect to RabbitMQ: %v", err)
 	}
@@ -28,14 +35,26 @@ func main() {
 	}
 	defer ch.Close()
 
+	if err := ch.ExchangeDeclare(
+		exchange,
+		"topic",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	); err != nil {
+		log.Fatalf("[notifications] failed to declare exchange: %v", err)
+	}
+
 	queueName := "uade-notifications"
 
 	q, err := ch.QueueDeclare(
 		queueName,
-		true,  // durable
-		false, // auto-delete
-		false, // exclusive
-		false, // no-wait
+		true,
+		false,
+		false,
+		false,
 		nil,
 	)
 	if err != nil {
@@ -44,22 +63,21 @@ func main() {
 
 	if err := ch.QueueBind(
 		q.Name,
-		"agreement.*",      // routing key pattern
-		cfg.RabbitExchange, // exchange
+		"agreement.*",
+		exchange,
 		false,
 		nil,
 	); err != nil {
 		log.Fatalf("[notifications] failed to bind queue: %v", err)
 	}
 
-	log.Printf("[notifications] waiting for messages in queue=%s binding=%s -> %s",
-		q.Name, cfg.RabbitExchange, "agreement.*")
+	log.Printf("[notifications] waiting for messages in queue=%s, exchange=%s", q.Name, exchange)
 
 	msgs, err := ch.Consume(
 		q.Name,
 		"",
-		true,  // auto-ack
-		false, // exclusive
+		true,
+		false,
 		false,
 		false,
 		nil,
@@ -68,7 +86,6 @@ func main() {
 		log.Fatalf("[notifications] failed to register consumer: %v", err)
 	}
 
-	// 5. Обрабатываем сообщениxя
 	go func() {
 		for d := range msgs {
 			var payload map[string]any

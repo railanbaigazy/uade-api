@@ -48,6 +48,8 @@ func NewPublisher(url, exchange string) (*AMQPPublisher, error) {
 		return nil, fmt.Errorf("failed to declare exchange: %w", err)
 	}
 
+	log.Printf("[mq] connected to RabbitMQ, exchange=%s", exchange)
+
 	return &AMQPPublisher{
 		conn:     conn,
 		channel:  ch,
@@ -100,9 +102,11 @@ func (p *AMQPPublisher) Close() error {
 	if p == nil {
 		return nil
 	}
-	if err := p.channel.Close(); err != nil {
-		_ = p.conn.Close()
-		return err
+	if p.channel != nil {
+		_ = p.channel.Close()
 	}
-	return p.conn.Close()
+	if p.conn != nil {
+		return p.conn.Close()
+	}
+	return nil
 }
