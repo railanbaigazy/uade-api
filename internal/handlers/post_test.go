@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Get All
 func TestPostHandler_GetAll_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
 	h := NewPostHandler(db)
@@ -59,12 +58,11 @@ func TestPostHandler_GetAll_DBError(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// Create
 func TestPostHandler_Create_BadJSON(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
 	h := NewPostHandler(db)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/posts", strings.NewReader(`{`)) // invalid JSON
+	req := httptest.NewRequest(http.MethodPost, "/api/posts", strings.NewReader(`{`))
 	rec := httptest.NewRecorder()
 
 	h.Create(rec, req)
@@ -121,7 +119,6 @@ func TestPostHandler_Create_DBError(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// Update
 func TestPostHandler_Update_NotFound(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
 	h := NewPostHandler(db)
@@ -144,10 +141,9 @@ func TestPostHandler_Update_Forbidden(t *testing.T) {
 	h := NewPostHandler(db)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/posts/10", strings.NewReader(`{"title":"x","content":"y"}`))
-	req.Header.Set("X-User-ID", "2") // acting user
+	req.Header.Set("X-User-ID", "2")
 	req.SetPathValue("id", "10")
 
-	// author is user 1, acting user is 2 → forbidden
 	mock.ExpectQuery(`SELECT author_id FROM posts`).
 		WillReturnRows(sqlmock.NewRows([]string{"author_id"}).AddRow(1))
 
@@ -185,7 +181,6 @@ func TestPostHandler_Update_Success(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// Delete
 func TestPostHandler_Delete_NotFound(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
 	h := NewPostHandler(db)

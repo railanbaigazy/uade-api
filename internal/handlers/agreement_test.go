@@ -15,10 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Create
 func TestAgreementHandler_Create_BadJSON(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(`{`))
 	rec := httptest.NewRecorder()
@@ -31,7 +30,7 @@ func TestAgreementHandler_Create_BadJSON(t *testing.T) {
 
 func TestAgreementHandler_Create_MissingPostID(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"principal_amount": 1000, "interest_rate": 0.1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -45,7 +44,7 @@ func TestAgreementHandler_Create_MissingPostID(t *testing.T) {
 
 func TestAgreementHandler_Create_InvalidPrincipalAmount(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 1, "principal_amount": -100, "interest_rate": 0.1, "due_date": "2026-01-01", "payment_frequency": "one_time", "number_of_payments": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -59,7 +58,7 @@ func TestAgreementHandler_Create_InvalidPrincipalAmount(t *testing.T) {
 
 func TestAgreementHandler_Create_InvalidInterestRate(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 1, "principal_amount": 1000, "interest_rate": -0.5, "due_date": "2026-01-01", "payment_frequency": "one_time", "number_of_payments": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -73,7 +72,7 @@ func TestAgreementHandler_Create_InvalidInterestRate(t *testing.T) {
 
 func TestAgreementHandler_Create_InvalidPaymentFrequency(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 1, "principal_amount": 1000, "interest_rate": 0.1, "due_date": "2026-01-01", "payment_frequency": "invalid", "number_of_payments": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -87,7 +86,7 @@ func TestAgreementHandler_Create_InvalidPaymentFrequency(t *testing.T) {
 
 func TestAgreementHandler_Create_InvalidDueDateFormat(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 1, "principal_amount": 1000, "interest_rate": 0.1, "due_date": "01/01/2026", "payment_frequency": "one_time", "number_of_payments": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -101,7 +100,7 @@ func TestAgreementHandler_Create_InvalidDueDateFormat(t *testing.T) {
 
 func TestAgreementHandler_Create_PostNotFound(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 999, "principal_amount": 1000, "interest_rate": 0.1, "due_date": "2026-12-31", "payment_frequency": "one_time", "number_of_payments": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -122,7 +121,7 @@ func TestAgreementHandler_Create_PostNotFound(t *testing.T) {
 
 func TestAgreementHandler_Create_WrongPostType(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 1, "principal_amount": 1000, "interest_rate": 0.1, "due_date": "2026-12-31", "payment_frequency": "one_time", "number_of_payments": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -142,7 +141,7 @@ func TestAgreementHandler_Create_WrongPostType(t *testing.T) {
 
 func TestAgreementHandler_Create_OwnPost(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 1, "principal_amount": 1000, "interest_rate": 0.1, "due_date": "2026-12-31", "payment_frequency": "one_time", "number_of_payments": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -162,7 +161,7 @@ func TestAgreementHandler_Create_OwnPost(t *testing.T) {
 
 func TestAgreementHandler_Create_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"post_id": 1, "principal_amount": 1000, "interest_rate": 0.1, "due_date": "2026-12-31", "payment_frequency": "monthly", "number_of_payments": 12}`
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements", strings.NewReader(body))
@@ -188,15 +187,14 @@ func TestAgreementHandler_Create_Success(t *testing.T) {
 	require.Equal(t, int64(1), agreement.LenderID)
 	require.Equal(t, int64(2), agreement.BorrowerID)
 	require.Equal(t, 1000.0, agreement.PrincipalAmount)
-	require.Equal(t, 1100.0, agreement.TotalAmount) // 1000 * 1.1
+	require.Equal(t, 1100.0, agreement.TotalAmount)
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// GetUserAgreements
 func TestAgreementHandler_GetUserAgreements_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agreements", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -231,7 +229,7 @@ func TestAgreementHandler_GetUserAgreements_Success(t *testing.T) {
 
 func TestAgreementHandler_GetUserAgreements_WithStatusFilter(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agreements?status=active", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -256,10 +254,9 @@ func TestAgreementHandler_GetUserAgreements_WithStatusFilter(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// GetByID
 func TestAgreementHandler_GetByID_NotFound(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agreements/999", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -280,7 +277,7 @@ func TestAgreementHandler_GetByID_NotFound(t *testing.T) {
 
 func TestAgreementHandler_GetByID_Forbidden(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agreements/1", nil)
 	req.Header.Set("X-User-ID", "3")
@@ -316,7 +313,7 @@ func TestAgreementHandler_GetByID_Forbidden(t *testing.T) {
 
 func TestAgreementHandler_GetByID_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agreements/1", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -353,10 +350,9 @@ func TestAgreementHandler_GetByID_Success(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// Accept
 func TestAgreementHandler_Accept_NotFound(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements/999/accept", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -377,7 +373,7 @@ func TestAgreementHandler_Accept_NotFound(t *testing.T) {
 
 func TestAgreementHandler_Accept_NotLender(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/accept", nil)
 	req.Header.Set("X-User-ID", "2")
@@ -413,7 +409,7 @@ func TestAgreementHandler_Accept_NotLender(t *testing.T) {
 
 func TestAgreementHandler_Accept_NotPending(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/accept", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -449,7 +445,7 @@ func TestAgreementHandler_Accept_NotPending(t *testing.T) {
 
 func TestAgreementHandler_Accept_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/accept", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -490,10 +486,9 @@ func TestAgreementHandler_Accept_Success(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// Cancel
 func TestAgreementHandler_Cancel_NotFound(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements/999/cancel", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -513,7 +508,7 @@ func TestAgreementHandler_Cancel_NotFound(t *testing.T) {
 
 func TestAgreementHandler_Cancel_NotAuthorized(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/cancel", nil)
 	req.Header.Set("X-User-ID", "3")
@@ -549,7 +544,7 @@ func TestAgreementHandler_Cancel_NotAuthorized(t *testing.T) {
 
 func TestAgreementHandler_Cancel_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/cancel", nil)
 	req.Header.Set("X-User-ID", "1")
@@ -590,10 +585,9 @@ func TestAgreementHandler_Cancel_Success(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-// UpdateContract
 func TestAgreementHandler_UpdateContract_BadJSON(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/agreements/1/contract", strings.NewReader(`{`))
 	req.SetPathValue("id", "1")
@@ -607,7 +601,7 @@ func TestAgreementHandler_UpdateContract_BadJSON(t *testing.T) {
 
 func TestAgreementHandler_UpdateContract_MissingURL(t *testing.T) {
 	db, _ := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"contract_hash": "abc123"}`
 	req := httptest.NewRequest(http.MethodPut, "/api/agreements/1/contract", strings.NewReader(body))
@@ -622,7 +616,7 @@ func TestAgreementHandler_UpdateContract_MissingURL(t *testing.T) {
 
 func TestAgreementHandler_UpdateContract_NotLender(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"contract_url": "https://example.com/contract.pdf", "contract_hash": "abc123"}`
 	req := httptest.NewRequest(http.MethodPut, "/api/agreements/1/contract", strings.NewReader(body))
@@ -659,7 +653,7 @@ func TestAgreementHandler_UpdateContract_NotLender(t *testing.T) {
 
 func TestAgreementHandler_UpdateContract_Success(t *testing.T) {
 	db, mock := utils.NewSQLXMock(t)
-	h := NewAgreementHandler(db)
+	h := NewAgreementHandler(db, nil)
 
 	body := `{"contract_url": "https://example.com/contract.pdf", "contract_hash": "abc123"}`
 	req := httptest.NewRequest(http.MethodPut, "/api/agreements/1/contract", strings.NewReader(body))

@@ -10,15 +10,20 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/railanbaigazy/uade-api/internal/app/models"
+	"github.com/railanbaigazy/uade-api/internal/mq"
 	"github.com/railanbaigazy/uade-api/internal/utils"
 )
 
 type AgreementHandler struct {
-	DB *sqlx.DB
+	DB        *sqlx.DB
+	Publisher mq.Publisher
 }
 
-func NewAgreementHandler(db *sqlx.DB) *AgreementHandler {
-	return &AgreementHandler{DB: db}
+func NewAgreementHandler(db *sqlx.DB, publisher mq.Publisher) *AgreementHandler {
+	return &AgreementHandler{
+		DB:        db,
+		Publisher: publisher,
+	}
 }
 
 func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +148,23 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 	agreement.PaymentFrequency = input.PaymentFrequency
 	agreement.NumberOfPayments = input.NumberOfPayments
 	agreement.Status = "pending"
+
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.created", map[string]any{
+			"agreement_id":       agreement.ID,
+			"lender_id":          agreement.LenderID,
+			"borrower_id":        agreement.BorrowerID,
+			"post_id":            agreement.PostID,
+			"principal_amount":   agreement.PrincipalAmount,
+			"interest_rate":      agreement.InterestRate,
+			"total_amount":       agreement.TotalAmount,
+			"currency":           agreement.Currency,
+			"due_date":           agreement.DueDate,
+			"payment_frequency":  agreement.PaymentFrequency,
+			"number_of_payments": agreement.NumberOfPayments,
+			"status":             agreement.Status,
+		})
+	}
 
 	w.WriteHeader(http.StatusCreated)
 
@@ -278,6 +300,19 @@ func (h *AgreementHandler) Accept(w http.ResponseWriter, r *http.Request) {
 	startDate := now
 	agreement.StartDate = &startDate
 
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.accepted", map[string]any{
+			"agreement_id": agreement.ID,
+			"lender_id":    agreement.LenderID,
+			"borrower_id":  agreement.BorrowerID,
+			"post_id":      agreement.PostID,
+			"status":       agreement.Status,
+			"accepted_at":  agreement.AcceptedAt,
+			"start_date":   agreement.StartDate,
+			"due_date":     agreement.DueDate,
+		})
+	}
+
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 	}
@@ -316,6 +351,16 @@ func (h *AgreementHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agreement.Status = "cancelled"
+
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.cancelled", map[string]any{
+			"agreement_id": agreement.ID,
+			"lender_id":    agreement.LenderID,
+			"borrower_id":  agreement.BorrowerID,
+			"post_id":      agreement.PostID,
+			"status":       agreement.Status,
+		})
+	}
 
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
@@ -373,6 +418,15 @@ func (h *AgreementHandler) UpdateContract(w http.ResponseWriter, r *http.Request
 
 	agreement.ContractURL = &input.ContractURL
 	agreement.ContractHash = &input.ContractHash
+
+	if h.Publisher != nil {
+		_ = h.Publisher.Publish(r.Context(), "agreement.contract_updated", map[string]any{
+			"agreement_id":  agreement.ID,
+			"post_id":       agreement.PostID,
+			"contract_url":  agreement.ContractURL,
+			"contract_hash": agreement.ContractHash,
+		})
+	}
 
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
