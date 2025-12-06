@@ -18,7 +18,7 @@ services:
       db:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
+        condition: service_started
 
   db:
     image: postgres:18
@@ -44,3 +44,13 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+
+  notifications:
+    build: .
+    command: go run ./cmd/notifications
+    container_name: uade-notifications
+    depends_on:
+      - rabbitmq
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=uade.events

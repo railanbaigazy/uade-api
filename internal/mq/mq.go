@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/railanbaigazy/uade-api/internal/metrics"
 )
 
 type Publisher interface {
@@ -60,6 +62,7 @@ func (p *AMQPPublisher) Publish(ctx context.Context, routingKey string, payload 
 
 	body, err := json.Marshal(payload)
 	if err != nil {
+		metrics.MQPublishErrorsTotal.WithLabelValues(routingKey).Inc()
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
@@ -70,7 +73,7 @@ func (p *AMQPPublisher) Publish(ctx context.Context, routingKey string, payload 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	return p.channel.PublishWithContext(
+	err = p.channel.PublishWithContext(
 		ctx,
 		p.exchange,
 		routingKey,
@@ -81,6 +84,16 @@ func (p *AMQPPublisher) Publish(ctx context.Context, routingKey string, payload 
 			Body:        body,
 		},
 	)
+	if err != nil {
+		metrics.MQPublishErrorsTotal.WithLabelValues(routingKey).Inc()
+		log.Printf("[mq] failed to publish routing_key=%s err=%v", routingKey, err)
+		return err
+	}
+
+	metrics.MQPublishedTotal.WithLabelValues(routingKey).Inc()
+	log.Printf("[mq] published routing_key=%s size=%d", routingKey, len(body))
+
+	return nil
 }
 
 func (p *AMQPPublisher) Close() error {
