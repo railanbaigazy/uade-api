@@ -43,6 +43,7 @@ func (a *App) SetupRoutes() *http.ServeMux {
 	mux.Handle("POST /api/agreements", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.Create)))
 	mux.Handle("POST /api/agreements/{id}/accept", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.Accept)))
 	mux.Handle("POST /api/agreements/{id}/cancel", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.Cancel)))
+	mux.Handle("POST /api/agreements/{id}/contract/generate", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.GenerateContract)))
 	mux.Handle("PUT /api/agreements/{id}/contract", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.UpdateContract)))
 
 	return mux

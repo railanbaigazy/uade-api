@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/railanbaigazy/uade-api/internal/app/models"
+	"github.com/railanbaigazy/uade-api/internal/contracts"
 	"github.com/railanbaigazy/uade-api/internal/utils"
 	"github.com/stretchr/testify/require"
 )
@@ -700,6 +702,150 @@ func TestAgreementHandler_UpdateContract_Success(t *testing.T) {
 	require.Equal(t, "https://example.com/contract.pdf", *agreement.ContractURL)
 	require.NotNil(t, agreement.ContractHash)
 	require.Equal(t, "abc123", *agreement.ContractHash)
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// GenerateContract
+func TestAgreementHandler_GenerateContract_NotFound(t *testing.T) {
+	db, mock := utils.NewSQLXMock(t)
+	h := NewAgreementHandler(db)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agreements/99/contract/generate", nil)
+	req.Header.Set("X-User-ID", "1")
+	req.SetPathValue("id", "99")
+
+	mock.ExpectQuery(`SELECT \* FROM agreements WHERE id=\$1`).
+		WithArgs("99").
+		WillReturnError(sql.ErrNoRows)
+
+	rec := httptest.NewRecorder()
+	h.GenerateContract(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Contains(t, rec.Body.String(), "agreement not found")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAgreementHandler_GenerateContract_NotAuthorized(t *testing.T) {
+	db, mock := utils.NewSQLXMock(t)
+	h := NewAgreementHandler(db)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/contract/generate", nil)
+	req.Header.Set("X-User-ID", "3")
+	req.SetPathValue("id", "1")
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"id", "lender_id", "borrower_id", "post_id",
+		"principal_amount", "interest_rate", "total_amount", "currency",
+		"created_at", "accepted_at", "disbursed_at", "start_date", "due_date", "completed_at",
+		"payment_frequency", "number_of_payments",
+		"status", "contract_url", "contract_hash",
+	}).AddRow(
+		1, 1, 2, 10,
+		1000.0, 0.1, 1100.0, "KZT",
+		now, &now, nil, &now, now.AddDate(0, 1, 0), nil,
+		"one_time", 1,
+		"active", nil, nil,
+	)
+
+	mock.ExpectQuery(`SELECT \* FROM agreements WHERE id=\$1`).
+		WithArgs("1").
+		WillReturnRows(rows)
+
+	rec := httptest.NewRecorder()
+	h.GenerateContract(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Contains(t, rec.Body.String(), "not authorized")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAgreementHandler_GenerateContract_NotActive(t *testing.T) {
+	db, mock := utils.NewSQLXMock(t)
+	h := NewAgreementHandler(db)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/contract/generate", nil)
+	req.Header.Set("X-User-ID", "1")
+	req.SetPathValue("id", "1")
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"id", "lender_id", "borrower_id", "post_id",
+		"principal_amount", "interest_rate", "total_amount", "currency",
+		"created_at", "accepted_at", "disbursed_at", "start_date", "due_date", "completed_at",
+		"payment_frequency", "number_of_payments",
+		"status", "contract_url", "contract_hash",
+	}).AddRow(
+		1, 1, 2, 10,
+		1000.0, 0.1, 1100.0, "KZT",
+		now, nil, nil, nil, now.AddDate(0, 1, 0), nil,
+		"one_time", 1,
+		"pending", nil, nil,
+	)
+
+	mock.ExpectQuery(`SELECT \* FROM agreements WHERE id=\$1`).
+		WithArgs("1").
+		WillReturnRows(rows)
+
+	rec := httptest.NewRecorder()
+	h.GenerateContract(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "contract generation is available only for active agreements")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAgreementHandler_GenerateContract_Success(t *testing.T) {
+	db, mock := utils.NewSQLXMock(t)
+	h := NewAgreementHandler(db)
+	tmp := t.TempDir()
+	h.ContractGenerator = contracts.NewGenerator(tmp)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agreements/1/contract/generate", nil)
+	req.Header.Set("X-User-ID", "1")
+	req.SetPathValue("id", "1")
+
+	now := time.Now()
+	due := now.AddDate(0, 1, 0)
+	rows := sqlmock.NewRows([]string{
+		"id", "lender_id", "borrower_id", "post_id",
+		"principal_amount", "interest_rate", "total_amount", "currency",
+		"created_at", "accepted_at", "disbursed_at", "start_date", "due_date", "completed_at",
+		"payment_frequency", "number_of_payments",
+		"status", "contract_url", "contract_hash",
+	}).AddRow(
+		1, 1, 2, 10,
+		1000.0, 0.1, 1100.0, "KZT",
+		now, &now, nil, &now, due, nil,
+		"one_time", 1,
+		"active", nil, nil,
+	)
+
+	mock.ExpectQuery(`SELECT \* FROM agreements WHERE id=\$1`).
+		WithArgs("1").
+		WillReturnRows(rows)
+
+	mock.ExpectExec(`UPDATE agreements 
+		SET contract_url = \$1, contract_hash = \$2
+		WHERE id = \$3`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	rec := httptest.NewRecorder()
+	h.GenerateContract(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp models.Agreement
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.NotNil(t, resp.ContractURL)
+	require.NotNil(t, resp.ContractHash)
+	_, err := os.Stat(*resp.ContractURL)
+	require.NoError(t, err)
+	require.Contains(t, *resp.ContractURL, "contract.pdf")
+	require.NotEmpty(t, *resp.ContractHash)
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
