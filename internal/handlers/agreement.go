@@ -10,27 +10,30 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/railanbaigazy/uade-api/internal/app/models"
-	"github.com/railanbaigazy/uade-api/internal/mq"
 	"github.com/railanbaigazy/uade-api/internal/contracts"
+	"github.com/railanbaigazy/uade-api/internal/mq"
 	"github.com/railanbaigazy/uade-api/internal/utils"
 )
 
 type AgreementHandler struct {
-	DB        *sqlx.DB
-	Publisher mq.Publisher
-}
-
-func NewAgreementHandler(db *sqlx.DB, publisher mq.Publisher) *AgreementHandler {
-	return &AgreementHandler{
-		DB:        db,
-		Publisher: publisher,
-	}
 	DB                *sqlx.DB
+	Publisher         mq.Publisher
 	ContractGenerator *contracts.Generator
 }
 
-func NewAgreementHandler(db *sqlx.DB) *AgreementHandler {
-	return &AgreementHandler{DB: db, ContractGenerator: contracts.NewGenerator("contracts")}
+// NewAgreementHandler constructs AgreementHandler.
+// Publisher is optional: pass it as the second argument or omit it.
+func NewAgreementHandler(db *sqlx.DB, publisher ...mq.Publisher) *AgreementHandler {
+	var pub mq.Publisher
+	if len(publisher) > 0 {
+		pub = publisher[0]
+	}
+
+	return &AgreementHandler{
+		DB:                db,
+		Publisher:         pub,
+		ContractGenerator: contracts.NewGenerator("contracts"),
+	}
 }
 
 func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -292,11 +295,10 @@ func (h *AgreementHandler) Accept(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	_, err = h.DB.Exec(`
-		UPDATE agreements 
-		SET status = 'active', accepted_at = $1, start_date = $2
-		WHERE id = $3
-	`, now, now, id)
+	_, err = h.DB.Exec(
+		"UPDATE agreements SET status = 'active', accepted_at = $1, start_date = $2 WHERE id = $3",
+		now, now, id,
+	)
 	if err != nil {
 		utils.WriteJSONError(w, "failed to accept agreement", http.StatusInternalServerError)
 		return
@@ -413,11 +415,10 @@ func (h *AgreementHandler) UpdateContract(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err = h.DB.Exec(`
-		UPDATE agreements 
-		SET contract_url = $1, contract_hash = $2
-		WHERE id = $3
-	`, input.ContractURL, input.ContractHash, id)
+	_, err = h.DB.Exec(
+		"UPDATE agreements SET contract_url = $1, contract_hash = $2 WHERE id = $3",
+		input.ContractURL, input.ContractHash, id,
+	)
 	if err != nil {
 		utils.WriteJSONError(w, "failed to update contract", http.StatusInternalServerError)
 		return
