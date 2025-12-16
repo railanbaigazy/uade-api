@@ -16,11 +16,8 @@ import (
 
 	"github.com/railanbaigazy/uade-api/internal/app"
 	"github.com/railanbaigazy/uade-api/internal/config"
-<<<<<<< HEAD
-	"github.com/railanbaigazy/uade-api/internal/mq"
-=======
 	"github.com/railanbaigazy/uade-api/internal/metrics"
->>>>>>> 0a5a1fb5cd5f313529f0a404b4d56f8823e42c8a
+	"github.com/railanbaigazy/uade-api/internal/mq"
 )
 
 func main() {

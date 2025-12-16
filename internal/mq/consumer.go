@@ -167,8 +167,10 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 			if err := c.handleMessage(msg); err != nil {
 				log.Printf("Error handling message: %v", err)
-				// Reject and requeue (will go to DLQ after max retries)
-				_ = msg.Nack(false, true)
+				// Reject without requeue so message is routed to DLQ
+				if err := msg.Nack(false, false); err != nil {
+					log.Printf("Error nack message: %v", err)
+				}
 			} else {
 				// Acknowledge successful processing
 				if err := msg.Ack(false); err != nil {
@@ -206,12 +208,22 @@ func (c *Consumer) handleAgreementAccepted(body []byte) error {
 		return fmt.Errorf("failed to unmarshal agreement accepted event: %w", err)
 	}
 
-	// Create notifications for both lender and borrower
+	// Create notifications for both lender and borrower in a single transaction
 	metadata, _ := json.Marshal(map[string]interface{}{
 		"agreement_id": event.AgreementID,
 		"post_id":      event.PostID,
 	})
 	metadataStr := string(metadata)
+
+	tx, err := c.db.Beginx()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
 	// Notification for borrower
 	borrowerQuery := `
@@ -220,15 +232,19 @@ func (c *Consumer) handleAgreementAccepted(body []byte) error {
 	`
 	borrowerTitle := "Agreement Accepted"
 	borrowerMsg := fmt.Sprintf("Your agreement #%d has been accepted by the lender.", event.AgreementID)
-	if _, err := c.db.Exec(borrowerQuery, event.BorrowerID, "agreement_accepted", borrowerTitle, borrowerMsg, metadataStr); err != nil {
+	if _, err = tx.Exec(borrowerQuery, event.BorrowerID, "agreement_accepted", borrowerTitle, borrowerMsg, metadataStr); err != nil {
 		return fmt.Errorf("failed to create borrower notification: %w", err)
 	}
 
 	// Notification for lender
 	lenderTitle := "Agreement Accepted"
 	lenderMsg := fmt.Sprintf("You have accepted agreement #%d.", event.AgreementID)
-	if _, err := c.db.Exec(borrowerQuery, event.LenderID, "agreement_accepted", lenderTitle, lenderMsg, metadataStr); err != nil {
+	if _, err = tx.Exec(borrowerQuery, event.LenderID, "agreement_accepted", lenderTitle, lenderMsg, metadataStr); err != nil {
 		return fmt.Errorf("failed to create lender notification: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	log.Printf("Created notifications for agreement accepted: agreement_id=%d", event.AgreementID)
@@ -279,18 +295,32 @@ func (c *Consumer) handleAgreementCancelled(body []byte) error {
 		VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
 	`
 
-	// Notify both parties
+	// Notify both parties in a single transaction
 	title := "Agreement Cancelled"
 	msg := fmt.Sprintf("Agreement #%d has been cancelled.", event.AgreementID)
 
+	tx, err := c.db.Beginx()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
 	// Notify lender
-	if _, err := c.db.Exec(query, event.LenderID, "agreement_cancelled", title, msg, metadataStr); err != nil {
+	if _, err = tx.Exec(query, event.LenderID, "agreement_cancelled", title, msg, metadataStr); err != nil {
 		return fmt.Errorf("failed to create lender notification: %w", err)
 	}
 
 	// Notify borrower
-	if _, err := c.db.Exec(query, event.BorrowerID, "agreement_cancelled", title, msg, metadataStr); err != nil {
+	if _, err = tx.Exec(query, event.BorrowerID, "agreement_cancelled", title, msg, metadataStr); err != nil {
 		return fmt.Errorf("failed to create borrower notification: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	log.Printf("Created notifications for agreement cancelled: agreement_id=%d", event.AgreementID)

@@ -122,17 +122,23 @@ func (h *NotificationHandler) MarkAsRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err = h.DB.Exec(`
+	// Update notification as read and return the updated read_at value
+	var readAt sql.NullTime
+	err = h.DB.QueryRow(`
 		UPDATE notifications 
 		SET read = true, read_at = NOW()
 		WHERE id = $1 AND user_id = $2
-	`, id, userID)
+		RETURNING read_at
+	`, id, userID).Scan(&readAt)
 	if err != nil {
 		utils.WriteJSONError(w, "failed to mark notification as read", http.StatusInternalServerError)
 		return
 	}
 
 	notification.Read = true
+	if readAt.Valid {
+		notification.ReadAt = &readAt.Time
+	}
 
 	if err := json.NewEncoder(w).Encode(notification); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
