@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/railanbaigazy/uade-api/internal/app/models"
 	"github.com/railanbaigazy/uade-api/internal/mq"
+	"github.com/railanbaigazy/uade-api/internal/contracts"
 	"github.com/railanbaigazy/uade-api/internal/utils"
 )
 
@@ -24,6 +25,12 @@ func NewAgreementHandler(db *sqlx.DB, publisher mq.Publisher) *AgreementHandler 
 		DB:        db,
 		Publisher: publisher,
 	}
+	DB                *sqlx.DB
+	ContractGenerator *contracts.Generator
+}
+
+func NewAgreementHandler(db *sqlx.DB) *AgreementHandler {
+	return &AgreementHandler{DB: db, ContractGenerator: contracts.NewGenerator("contracts")}
 }
 
 func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -427,6 +434,61 @@ func (h *AgreementHandler) UpdateContract(w http.ResponseWriter, r *http.Request
 			"contract_hash": agreement.ContractHash,
 		})
 	}
+
+	if err := json.NewEncoder(w).Encode(agreement); err != nil {
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+	}
+}
+
+func (h *AgreementHandler) GenerateContract(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	userIDStr := r.Header.Get("X-User-ID")
+	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+
+	var agreement models.Agreement
+	err := h.DB.Get(&agreement, "SELECT * FROM agreements WHERE id=$1", id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			utils.WriteJSONError(w, "agreement not found", http.StatusNotFound)
+			return
+		}
+		utils.WriteJSONError(w, "failed to fetch agreement", http.StatusInternalServerError)
+		return
+	}
+
+	if agreement.LenderID != userID && agreement.BorrowerID != userID {
+		utils.WriteJSONError(w, "not authorized to generate contract for this agreement", http.StatusForbidden)
+		return
+	}
+
+	if agreement.Status != "active" {
+		utils.WriteJSONError(w, "contract generation is available only for active agreements", http.StatusBadRequest)
+		return
+	}
+
+	gen := h.ContractGenerator
+	if gen == nil {
+		gen = contracts.NewGenerator("contracts")
+	}
+
+	contractURL, contractHash, err := gen.Generate(r.Context(), &agreement)
+	if err != nil {
+		utils.WriteJSONError(w, "failed to generate contract", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = h.DB.Exec(`
+		UPDATE agreements 
+		SET contract_url = $1, contract_hash = $2
+		WHERE id = $3
+	`, contractURL, contractHash, id)
+	if err != nil {
+		utils.WriteJSONError(w, "failed to persist contract metadata", http.StatusInternalServerError)
+		return
+	}
+
+	agreement.ContractURL = &contractURL
+	agreement.ContractHash = &contractHash
 
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)

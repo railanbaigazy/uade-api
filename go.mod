@@ -13,6 +13,8 @@ require (
 	golang.org/x/crypto v0.43.0
 )
 
+require github.com/jung-kurt/gofpdf v1.16.2
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect

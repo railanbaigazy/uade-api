@@ -83,6 +83,13 @@ func (a *App) SetupRoutes() *http.ServeMux {
 		middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.MarkAsRead)))
 	mux.Handle("PATCH /api/notifications/read-all",
 		middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.MarkAllAsRead)))
+	mux.Handle("GET /api/agreements", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.GetUserAgreements)))
+	mux.Handle("GET /api/agreements/{id}", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.GetByID)))
+	mux.Handle("POST /api/agreements", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.Create)))
+	mux.Handle("POST /api/agreements/{id}/accept", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.Accept)))
+	mux.Handle("POST /api/agreements/{id}/cancel", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.Cancel)))
+	mux.Handle("POST /api/agreements/{id}/contract/generate", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.GenerateContract)))
+	mux.Handle("PUT /api/agreements/{id}/contract", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.UpdateContract)))
 
 	return mux
 }
