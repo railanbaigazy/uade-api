@@ -24,15 +24,16 @@ func NewGenerator(basePath string) *Generator {
 
 func (g *Generator) Generate(_ context.Context, agreement *models.Agreement) (string, string, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetCreationDate(time.Unix(0, 0))
-	pdf.SetTitle(fmt.Sprintf("Agreement #%d", agreement.ID), false)
+
+	pdf.AddUTF8Font("DejaVu", "", "fonts/DejaVuSans.ttf")
+	pdf.AddUTF8Font("DejaVu", "B", "fonts/DejaVuSans-Bold.ttf")
 
 	pdf.AddPage()
-	pdf.SetFont("Arial", "B", 14)
+	pdf.SetFont("DejaVu", "B", 14)
 	pdf.Cell(0, 10, "Қарыз шарты / Договор займа")
 	pdf.Ln(12)
 
-	pdf.SetFont("Arial", "", 11)
+	pdf.SetFont("DejaVu", "", 11)
 	pdf.MultiCell(0, 8, g.buildKazakhSection(agreement), "", "L", false)
 	pdf.Ln(4)
 	pdf.MultiCell(0, 8, g.buildRussianSection(agreement), "", "L", false)

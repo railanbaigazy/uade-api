@@ -85,7 +85,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "invalid due_date format, use YYYY-MM-DD", http.StatusBadRequest)
 		return
 	}
-
 	if dueDate.Before(time.Now()) {
 		utils.WriteJSONError(w, "due_date must be in the future", http.StatusBadRequest)
 		return
@@ -104,7 +103,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 			utils.WriteJSONError(w, "post not found", http.StatusNotFound)
 			return
 		}
-
 		utils.WriteJSONError(w, "failed to fetch post", http.StatusInternalServerError)
 		return
 	}
@@ -113,7 +111,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "can only create agreements for lend posts", http.StatusBadRequest)
 		return
 	}
-
 	if int64(post.AuthorID) == borrowerID {
 		utils.WriteJSONError(w, "cannot create agreement with your own post", http.StatusBadRequest)
 		return
@@ -232,7 +229,6 @@ func (h *AgreementHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 			utils.WriteJSONError(w, "agreement not found", http.StatusNotFound)
 			return
 		}
-
 		utils.WriteJSONError(w, "failed to fetch agreement", http.StatusInternalServerError)
 		return
 	}
@@ -267,7 +263,6 @@ func (h *AgreementHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "only lender can accept the agreement", http.StatusForbidden)
 		return
 	}
-
 	if agreement.Status != "pending" {
 		utils.WriteJSONError(w, "can only accept pending agreements", http.StatusBadRequest)
 		return
@@ -314,7 +309,6 @@ func (h *AgreementHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "not authorized to cancel this agreement", http.StatusForbidden)
 		return
 	}
-
 	if agreement.Status != "pending" {
 		utils.WriteJSONError(w, "can only cancel pending agreements", http.StatusBadRequest)
 		return
@@ -327,7 +321,6 @@ func (h *AgreementHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agreement.Status = "cancelled"
-
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 	}
@@ -410,7 +403,6 @@ func (h *AgreementHandler) GenerateContract(w http.ResponseWriter, r *http.Reque
 		utils.WriteJSONError(w, "not authorized to generate contract for this agreement", http.StatusForbidden)
 		return
 	}
-
 	if agreement.Status != "active" {
 		utils.WriteJSONError(w, "contract generation is available only for active agreements", http.StatusBadRequest)
 		return
