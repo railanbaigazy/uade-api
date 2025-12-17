@@ -277,21 +277,23 @@ func (c *Consumer) handleAgreementAccepted(body []byte) error {
 		}
 	}()
 
-	// Notification for borrower
-	borrowerQuery := `
+	// Notification query
+	notificationQuery := `
 		INSERT INTO notifications (user_id, type, title, message, metadata, created_at)
 		VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
 	`
+
+	// Notification for borrower
 	borrowerTitle := "Agreement Accepted"
 	borrowerMsg := fmt.Sprintf("Your agreement #%d has been accepted by the lender.", event.AgreementID)
-	if _, err = tx.Exec(borrowerQuery, event.BorrowerID, "agreement_accepted", borrowerTitle, borrowerMsg, metadataStr); err != nil {
+	if _, err = tx.Exec(notificationQuery, event.BorrowerID, "agreement_accepted", borrowerTitle, borrowerMsg, metadataStr); err != nil {
 		return fmt.Errorf("failed to create borrower notification: %w", err)
 	}
 
 	// Notification for lender
 	lenderTitle := "Agreement Accepted"
 	lenderMsg := fmt.Sprintf("You have accepted agreement #%d.", event.AgreementID)
-	if _, err = tx.Exec(borrowerQuery, event.LenderID, "agreement_accepted", lenderTitle, lenderMsg, metadataStr); err != nil {
+	if _, err = tx.Exec(notificationQuery, event.LenderID, "agreement_accepted", lenderTitle, lenderMsg, metadataStr); err != nil {
 		return fmt.Errorf("failed to create lender notification: %w", err)
 	}
 

@@ -50,7 +50,13 @@ services:
     command: go run ./cmd/notifications
     container_name: uade-notifications
     depends_on:
-      - rabbitmq
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
     environment:
+      - DATABASE_URL=postgres://user:password@db:5432/uade?sslmode=disable
+      - JWT_SECRET=test-secret
+      - APP_ENV=development
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - RABBITMQ_EXCHANGE=uade.events
