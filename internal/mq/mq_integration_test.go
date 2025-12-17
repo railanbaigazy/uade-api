@@ -129,11 +129,6 @@ func TestIntegration_ConsumerWithDLQ(t *testing.T) {
 		url = "amqp://guest:guest@localhost:5672/"
 	}
 
-	exchange := os.Getenv("RABBITMQ_EXCHANGE")
-	if exchange == "" {
-		exchange = "uade.events"
-	}
-
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		t.Skipf("RabbitMQ not available: %v", err)
