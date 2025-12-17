@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -11,17 +12,20 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/railanbaigazy/uade-api/internal/app/models"
 	"github.com/railanbaigazy/uade-api/internal/contracts"
-	"github.com/railanbaigazy/uade-api/internal/rabbitmq"
 	"github.com/railanbaigazy/uade-api/internal/utils"
 )
+
+type ContractPublisher interface {
+	PublishGenerateContract(ctx context.Context, agreementID string) error
+}
 
 type AgreementHandler struct {
 	DB                *sqlx.DB
 	ContractGenerator *contracts.Generator
-	Publisher         *rabbitmq.Publisher
+	Publisher         ContractPublisher
 }
 
-func NewAgreementHandler(db *sqlx.DB, pub *rabbitmq.Publisher) *AgreementHandler {
+func NewAgreementHandler(db *sqlx.DB, pub ContractPublisher) *AgreementHandler {
 	return &AgreementHandler{
 		DB:                db,
 		ContractGenerator: contracts.NewGenerator("contracts"),
@@ -153,7 +157,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 	agreement.Status = "pending"
 
 	w.WriteHeader(http.StatusCreated)
-
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 	}
