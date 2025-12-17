@@ -9,15 +9,15 @@ import (
 )
 
 type Config struct {
-	DBURL              string
-	Port               string
-	Env                string
-	JWTSecret          string
-	RabbitURL          string
-	RabbitExchange     string
-	RabbitMaxRetries   int
-	RabbitRetryDelay   int // seconds
-	RabbitConnTimeout  int // seconds
+	DBURL             string
+	Port              string
+	Env               string
+	JWTSecret         string
+	RabbitURL         string
+	RabbitExchange    string
+	RabbitMaxRetries  int
+	RabbitRetryDelay  int // seconds
+	RabbitConnTimeout int // seconds
 }
 
 func Load() *Config {
