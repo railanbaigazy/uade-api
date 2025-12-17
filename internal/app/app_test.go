@@ -21,7 +21,7 @@ func setupTestApp(t *testing.T) *http.ServeMux {
 	db, err := sqlx.Connect("postgres", cfg.DBURL)
 	require.NoError(t, err)
 
-	a := New(db, cfg)
+	a := New(db, cfg, nil)
 	return a.SetupRoutes()
 }
 

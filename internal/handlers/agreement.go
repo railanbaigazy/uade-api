@@ -11,16 +11,22 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/railanbaigazy/uade-api/internal/app/models"
 	"github.com/railanbaigazy/uade-api/internal/contracts"
+	"github.com/railanbaigazy/uade-api/internal/rabbitmq"
 	"github.com/railanbaigazy/uade-api/internal/utils"
 )
 
 type AgreementHandler struct {
 	DB                *sqlx.DB
 	ContractGenerator *contracts.Generator
+	Publisher         *rabbitmq.Publisher
 }
 
-func NewAgreementHandler(db *sqlx.DB) *AgreementHandler {
-	return &AgreementHandler{DB: db, ContractGenerator: contracts.NewGenerator("contracts")}
+func NewAgreementHandler(db *sqlx.DB, pub *rabbitmq.Publisher) *AgreementHandler {
+	return &AgreementHandler{
+		DB:                db,
+		ContractGenerator: contracts.NewGenerator("contracts"),
+		Publisher:         pub,
+	}
 }
 
 func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -407,31 +413,20 @@ func (h *AgreementHandler) GenerateContract(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	gen := h.ContractGenerator
-	if gen == nil {
-		gen = contracts.NewGenerator("contracts")
-	}
-
-	contractURL, contractHash, err := gen.Generate(r.Context(), &agreement)
-	if err != nil {
-		utils.WriteJSONError(w, "failed to generate contract", http.StatusInternalServerError)
+	if h.Publisher == nil {
+		utils.WriteJSONError(w, "publisher not configured", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = h.DB.Exec(`
-		UPDATE agreements 
-		SET contract_url = $1, contract_hash = $2
-		WHERE id = $3
-	`, contractURL, contractHash, id)
-	if err != nil {
-		utils.WriteJSONError(w, "failed to persist contract metadata", http.StatusInternalServerError)
+	if err := h.Publisher.PublishGenerateContract(r.Context(), id); err != nil {
+		utils.WriteJSONError(w, "failed to enqueue contract generation", http.StatusInternalServerError)
 		return
 	}
 
-	agreement.ContractURL = &contractURL
-	agreement.ContractHash = &contractHash
-
-	if err := json.NewEncoder(w).Encode(agreement); err != nil {
-		http.Error(w, "Failed to write response", http.StatusInternalServerError)
-	}
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":      "queued",
+		"agreementID": id,
+		"message":     "contract generation requested",
+	})
 }

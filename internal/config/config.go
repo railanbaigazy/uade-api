@@ -12,6 +12,7 @@ type Config struct {
 	Port      string
 	Env       string
 	JWTSecret string
+	AMQPURL   string
 }
 
 func Load() *Config {
@@ -39,6 +40,11 @@ func Load() *Config {
 		log.Fatal("JWT_SECRET not set in .env")
 	}
 
+	amqpURL := os.Getenv("AMQP_URL")
+	if amqpURL == "" {
+		log.Fatal("AMQP_URL not set - set it in docker-compose environment or .env")
+	}
+
 	log.Printf("Loaded config for %s environment", env)
 
 	return &Config{
@@ -46,5 +52,6 @@ func Load() *Config {
 		Port:      port,
 		Env:       env,
 		JWTSecret: jwtSecret,
+		AMQPURL:   amqpURL,
 	}
 }
