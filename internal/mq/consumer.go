@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -30,17 +31,44 @@ type Consumer struct {
 	db       *sqlx.DB
 }
 
-// NewConsumer creates a new RabbitMQ consumer with DLQ support
+// NewConsumer creates a new RabbitMQ consumer with DLQ support and retry logic
 func NewConsumer(url, exchange string, db *sqlx.DB) (*Consumer, error) {
-	conn, err := amqp.Dial(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+	return NewConsumerWithRetry(url, exchange, db, defaultMaxRetries, defaultRetryDelay, defaultConnTimeout)
+}
+
+// NewConsumerWithRetry creates a new RabbitMQ consumer with custom retry settings
+func NewConsumerWithRetry(url, exchange string, db *sqlx.DB, maxRetries int, retryDelay, connTimeout time.Duration) (*Consumer, error) {
+	var conn *amqp.Connection
+	var ch *amqp.Channel
+	var err error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			log.Printf("[mq] [consumer] retrying connection (attempt %d/%d) in %v...", attempt+1, maxRetries, retryDelay)
+			time.Sleep(retryDelay)
+			retryDelay *= 2 // exponential backoff
+		}
+
+		conn, err = amqp.Dial(url)
+
+		if err != nil {
+			log.Printf("[mq] [consumer] connection attempt %d/%d failed: %v", attempt+1, maxRetries, err)
+			continue
+		}
+
+		ch, err = conn.Channel()
+		if err != nil {
+			conn.Close()
+			log.Printf("[mq] [consumer] channel creation attempt %d/%d failed: %v", attempt+1, maxRetries, err)
+			continue
+		}
+
+		log.Printf("[mq] [consumer] connected successfully (attempt %d/%d)", attempt+1, maxRetries)
+		break
 	}
 
-	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to open channel: %w", err)
+		return nil, fmt.Errorf("failed to connect to RabbitMQ after %d attempts: %w", maxRetries, err)
 	}
 
 	// Declare exchange
@@ -55,8 +83,10 @@ func NewConsumer(url, exchange string, db *sqlx.DB) (*Consumer, error) {
 	); err != nil {
 		ch.Close()
 		conn.Close()
+		log.Printf("[mq] [consumer] [ERROR] failed to declare exchange %s: %v", exchange, err)
 		return nil, fmt.Errorf("failed to declare exchange: %w", err)
 	}
+	log.Printf("[mq] [consumer] [INFO] declared exchange: %s", exchange)
 
 	// Declare DLQ (standalone queue for dead-lettered messages)
 	dlqArgs := amqp.Table{
@@ -72,8 +102,10 @@ func NewConsumer(url, exchange string, db *sqlx.DB) (*Consumer, error) {
 	); err != nil {
 		ch.Close()
 		conn.Close()
+		log.Printf("[mq] [consumer] [ERROR] failed to declare DLQ: %v", err)
 		return nil, fmt.Errorf("failed to declare DLQ: %w", err)
 	}
+	log.Printf("[mq] [consumer] [INFO] declared DLQ: %s", DLQ)
 
 	// Declare main queue with DLQ arguments
 	// When a message is rejected/nacked, it will be sent to the default exchange
@@ -126,8 +158,12 @@ func NewConsumer(url, exchange string, db *sqlx.DB) (*Consumer, error) {
 	); err != nil {
 		ch.Close()
 		conn.Close()
+		log.Printf("[mq] [consumer] [ERROR] failed to set QoS: %v", err)
 		return nil, fmt.Errorf("failed to set QoS: %w", err)
 	}
+
+	log.Printf("[mq] [consumer] [INFO] consumer initialized: exchange=%s queue=%s dlq=%s",
+		exchange, NotificationQueue, DLQ)
 
 	return &Consumer{
 		conn:     conn,
@@ -152,29 +188,31 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to register consumer: %w", err)
 	}
 
-	log.Println("Consumer started, waiting for messages...")
+	log.Printf("[mq] [consumer] [INFO] consumer started, waiting for messages in queue=%s", NotificationQueue)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Consumer context cancelled, stopping...")
+			log.Printf("[mq] [consumer] [INFO] context cancelled, stopping consumer...")
 			return nil
 		case msg, ok := <-msgs:
 			if !ok {
-				log.Println("Message channel closed")
+				log.Printf("[mq] [consumer] [ERROR] message channel closed")
 				return fmt.Errorf("message channel closed")
 			}
 
 			if err := c.handleMessage(msg); err != nil {
-				log.Printf("Error handling message: %v", err)
+				log.Printf("[mq] [consumer] [ERROR] error handling message routing_key=%s: %v", msg.RoutingKey, err)
 				// Reject without requeue so message is routed to DLQ
 				if err := msg.Nack(false, false); err != nil {
-					log.Printf("Error nack message: %v", err)
+					log.Printf("[mq] [consumer] [ERROR] failed to nack message: %v", err)
+				} else {
+					log.Printf("[mq] [consumer] [WARN] message nacked and routed to DLQ: routing_key=%s", msg.RoutingKey)
 				}
 			} else {
 				// Acknowledge successful processing
 				if err := msg.Ack(false); err != nil {
-					log.Printf("Error acknowledging message: %v", err)
+					log.Printf("[mq] [consumer] [ERROR] failed to acknowledge message: %v", err)
 				}
 			}
 		}
@@ -183,23 +221,37 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 // handleMessage processes a single message
 func (c *Consumer) handleMessage(msg amqp.Delivery) error {
-	log.Printf("Received message: routing key=%s, body=%s", msg.RoutingKey, string(msg.Body))
+	startTime := time.Now()
+	log.Printf("[mq] [consumer] [INFO] received message: routing_key=%s size=%d",
+		msg.RoutingKey, len(msg.Body))
 
+	var err error
 	switch msg.RoutingKey {
 	case RoutingKeyAgreementAccepted:
-		return c.handleAgreementAccepted(msg.Body)
+		err = c.handleAgreementAccepted(msg.Body)
 	case RoutingKeyAgreementCreated:
-		return c.handleAgreementCreated(msg.Body)
+		err = c.handleAgreementCreated(msg.Body)
 	case RoutingKeyAgreementCancelled:
-		return c.handleAgreementCancelled(msg.Body)
+		err = c.handleAgreementCancelled(msg.Body)
 	case RoutingKeyPaymentReminder:
-		return c.handlePaymentReminder(msg.Body)
+		err = c.handlePaymentReminder(msg.Body)
 	case RoutingKeyOverdueAlert:
-		return c.handleOverdueAlert(msg.Body)
+		err = c.handleOverdueAlert(msg.Body)
 	default:
-		log.Printf("Unknown routing key: %s", msg.RoutingKey)
+		log.Printf("[mq] [consumer] [ERROR] unknown routing key: %s", msg.RoutingKey)
 		return fmt.Errorf("unknown routing key: %s", msg.RoutingKey)
 	}
+
+	duration := time.Since(startTime)
+	if err != nil {
+		log.Printf("[mq] [consumer] [ERROR] failed to handle message routing_key=%s duration=%v err=%v",
+			msg.RoutingKey, duration, err)
+	} else {
+		log.Printf("[mq] [consumer] [INFO] successfully processed message routing_key=%s duration=%v",
+			msg.RoutingKey, duration)
+	}
+
+	return err
 }
 
 func (c *Consumer) handleAgreementAccepted(body []byte) error {

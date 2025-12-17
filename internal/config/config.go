@@ -3,17 +3,21 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	DBURL          string
-	Port           string
-	Env            string
-	JWTSecret      string
-	RabbitURL      string
-	RabbitExchange string
+	DBURL              string
+	Port               string
+	Env                string
+	JWTSecret          string
+	RabbitURL          string
+	RabbitExchange     string
+	RabbitMaxRetries   int
+	RabbitRetryDelay   int // seconds
+	RabbitConnTimeout  int // seconds
 }
 
 func Load() *Config {
@@ -57,6 +61,28 @@ func Load() *Config {
 	cfg.RabbitExchange = os.Getenv("RABBITMQ_EXCHANGE")
 	if cfg.RabbitExchange == "" {
 		cfg.RabbitExchange = "uade.events"
+	}
+
+	// RabbitMQ retry configuration
+	cfg.RabbitMaxRetries = 5
+	if maxRetries := os.Getenv("RABBITMQ_MAX_RETRIES"); maxRetries != "" {
+		if n, err := strconv.Atoi(maxRetries); err == nil && n > 0 {
+			cfg.RabbitMaxRetries = n
+		}
+	}
+
+	cfg.RabbitRetryDelay = 2
+	if retryDelay := os.Getenv("RABBITMQ_RETRY_DELAY"); retryDelay != "" {
+		if n, err := strconv.Atoi(retryDelay); err == nil && n > 0 {
+			cfg.RabbitRetryDelay = n
+		}
+	}
+
+	cfg.RabbitConnTimeout = 10
+	if connTimeout := os.Getenv("RABBITMQ_CONN_TIMEOUT"); connTimeout != "" {
+		if n, err := strconv.Atoi(connTimeout); err == nil && n > 0 {
+			cfg.RabbitConnTimeout = n
+		}
 	}
 
 	log.Printf("Loaded config for %s environment", env)
