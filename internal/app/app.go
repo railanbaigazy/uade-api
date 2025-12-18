@@ -24,6 +24,10 @@ func New(db *sqlx.DB, cfg *config.Config, pub *rabbitmq.Publisher) *App {
 func (a *App) SetupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
+	// Docs / Swagger
+	fileServer := http.FileServer(http.Dir("./docs"))
+	mux.Handle("/docs/", http.StripPrefix("/docs/", fileServer))
+
 	mux.HandleFunc("GET /healthz", handlers.HealthzHandler)
 	mux.Handle("GET /metrics", promhttp.Handler())
 
