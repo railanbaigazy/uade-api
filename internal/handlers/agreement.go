@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,17 +20,28 @@ type ContractPublisher interface {
 	PublishGenerateContract(ctx context.Context, agreementID string) error
 }
 
+type NotificationEvent interface {
+	GetType() string
+	GetUserID() int64
+}
+
+type NotificationPublisher interface {
+	PublishAgreementAccepted(ctx context.Context, event interface{}) error
+}
+
 type AgreementHandler struct {
 	DB                *sqlx.DB
 	ContractGenerator *contracts.Generator
 	Publisher         ContractPublisher
+	NotifPublisher    NotificationPublisher
 }
 
-func NewAgreementHandler(db *sqlx.DB, pub ContractPublisher) *AgreementHandler {
+func NewAgreementHandler(db *sqlx.DB, pub ContractPublisher, notifPub NotificationPublisher) *AgreementHandler {
 	return &AgreementHandler{
 		DB:                db,
 		ContractGenerator: contracts.NewGenerator("contracts"),
 		Publisher:         pub,
+		NotifPublisher:    notifPub,
 	}
 }
 
@@ -283,6 +295,39 @@ func (h *AgreementHandler) Accept(w http.ResponseWriter, r *http.Request) {
 	agreement.AcceptedAt = &now
 	startDate := now
 	agreement.StartDate = &startDate
+
+	// Publish notification events for both lender and borrower
+	if h.NotifPublisher != nil {
+		agreementIDInt, _ := strconv.Atoi(id)
+
+		// Notification for borrower
+		borrowerEvent := map[string]interface{}{
+			"type":         "agreement_accepted",
+			"user_id":      agreement.BorrowerID,
+			"title":        "Agreement Accepted",
+			"message":      fmt.Sprintf("Your loan agreement #%s has been accepted by the lender", id),
+			"agreement_id": agreementIDInt,
+			"metadata": map[string]interface{}{
+				"amount":   agreement.TotalAmount,
+				"currency": agreement.Currency,
+			},
+		}
+		_ = h.NotifPublisher.PublishAgreementAccepted(r.Context(), borrowerEvent)
+
+		// Notification for lender
+		lenderEvent := map[string]interface{}{
+			"type":         "agreement_accepted",
+			"user_id":      agreement.LenderID,
+			"title":        "Agreement Accepted",
+			"message":      fmt.Sprintf("You have accepted loan agreement #%s", id),
+			"agreement_id": agreementIDInt,
+			"metadata": map[string]interface{}{
+				"amount":   agreement.TotalAmount,
+				"currency": agreement.Currency,
+			},
+		}
+		_ = h.NotifPublisher.PublishAgreementAccepted(r.Context(), lenderEvent)
+	}
 
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)

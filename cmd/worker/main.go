@@ -37,10 +37,30 @@ func main() {
 
 	gen := contracts.NewGenerator("contracts")
 
-	c := worker.NewContractConsumer(db, mq.Ch, gen)
+	contractConsumer := worker.NewContractConsumer(db, mq.Ch, gen)
+	notificationConsumer := worker.NewNotificationConsumer(db, mq.Ch)
 
-	log.Println("worker: waiting for messages...")
-	if err := c.Run(); err != nil {
+	// Run both consumers in goroutines
+	errChan := make(chan error, 2)
+
+	go func() {
+		log.Println("worker: contract consumer starting...")
+		if err := contractConsumer.Run(); err != nil {
+			errChan <- err
+		}
+	}()
+
+	go func() {
+		log.Println("worker: notification consumer starting...")
+		if err := notificationConsumer.Run(); err != nil {
+			errChan <- err
+		}
+	}()
+
+	log.Println("worker: all consumers running, waiting for messages...")
+
+	// Wait for any consumer to fail
+	if err := <-errChan; err != nil {
 		log.Fatal("worker stopped:", err)
 	}
 }
