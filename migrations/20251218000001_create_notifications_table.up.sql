@@ -28,11 +28,11 @@ CREATE TABLE IF NOT EXISTS notifications (
     metadata JSONB,
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    read_at TIMESTAMPTZ,
-    
-    -- index for quick user queries
-    INDEX idx_notifications_user_id (user_id),
-    INDEX idx_notifications_user_status (user_id, status),
-    INDEX idx_notifications_created_at (created_at DESC)
+    read_at TIMESTAMPTZ
 );
+
+-- Create indexes for quick user queries
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_user_status ON notifications(user_id, status);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
 
