@@ -2,9 +2,12 @@ package main
 
 import (
 	"log"
+	"net/http"
+	"os"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/railanbaigazy/uade-api/internal/config"
 	"github.com/railanbaigazy/uade-api/internal/contracts"
@@ -14,6 +17,21 @@ import (
 
 func main() {
 	cfg := config.Load()
+
+	metricsPort := os.Getenv("WORKER_METRICS_PORT")
+	if metricsPort == "" {
+		metricsPort = "9091"
+	}
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		log.Printf("worker: metrics listening on :%s/metrics", metricsPort)
+
+		if err := http.ListenAndServe(":"+metricsPort, mux); err != nil {
+			log.Printf("worker: metrics server stopped: %v", err)
+		}
+	}()
 
 	db, err := sqlx.Open("postgres", cfg.DBURL)
 	if err != nil {

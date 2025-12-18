@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/railanbaigazy/uade-api/internal/app/middleware"
 	"github.com/railanbaigazy/uade-api/internal/config"
 	"github.com/railanbaigazy/uade-api/internal/handlers"
@@ -24,6 +25,7 @@ func (a *App) SetupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", handlers.HealthzHandler)
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	authHandler := handlers.NewAuthHandler(a.DB, a.Cfg)
 	userHandler := handlers.NewUserHandler(a.DB)
