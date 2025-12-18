@@ -1,0 +1,740 @@
+openapi: 3.0.3
+info:
+  title: Uade API
+  version: 1.0.0
+  description: |
+    REST API for the Uade borrowing–lending platform. All protected endpoints
+    require a `Bearer` JWT issued by the login endpoint.
+servers:
+  - url: http://localhost:8080
+    description: Local
+tags:
+  - name: Health
+  - name: Auth
+  - name: Users
+  - name: Posts
+  - name: Agreements
+  - name: Notifications
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app:
+                    type: string
+                example:
+                  app: ok
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and obtain JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthToken'
+        '400':
+          description: Invalid input
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Get the authenticated user's profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Missing or invalid token
+  /api/posts:
+    get:
+      tags: [Posts]
+      summary: List posts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Posts ordered by creation time
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Post'
+        '401':
+          description: Unauthorized
+    post:
+      tags: [Posts]
+      summary: Create a post
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostCreate'
+      responses:
+        '201':
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/posts/{id}:
+    put:
+      tags: [Posts]
+      summary: Update a post
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostCreate'
+      responses:
+        '200':
+          description: Post updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Invalid payload
+        '403':
+          description: Only the author can update
+        '404':
+          description: Post not found
+    delete:
+      tags: [Posts]
+      summary: Delete a post
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Post deleted
+        '403':
+          description: Only the author can delete
+        '404':
+          description: Not found
+  /api/agreements:
+    get:
+      tags: [Agreements]
+      summary: List agreements for the current user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            description: Filter by status (pending, active, cancelled, etc.)
+        - in: query
+          name: role
+          schema:
+            type: string
+            description: Filter by role (lender or borrower)
+      responses:
+        '200':
+          description: Agreements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agreement'
+        '401':
+          description: Unauthorized
+    post:
+      tags: [Agreements]
+      summary: Create an agreement for a lend post
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgreementCreate'
+      responses:
+        '201':
+          description: Agreement created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+        '400':
+          description: Invalid payload or business rule violation
+        '404':
+          description: Post not found
+  /api/agreements/{id}:
+    get:
+      tags: [Agreements]
+      summary: Get agreement by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Agreement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+        '403':
+          description: Not authorized to view
+        '404':
+          description: Not found
+  /api/agreements/{id}/accept:
+    post:
+      tags: [Agreements]
+      summary: Accept an agreement (lender only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Agreement accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+        '400':
+          description: Invalid status
+        '403':
+          description: Only lender can accept
+        '404':
+          description: Not found
+  /api/agreements/{id}/cancel:
+    post:
+      tags: [Agreements]
+      summary: Cancel a pending agreement
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Agreement cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+        '400':
+          description: Invalid status
+        '403':
+          description: Only lender or borrower can cancel
+        '404':
+          description: Not found
+  /api/agreements/{id}/contract/generate:
+    post:
+      tags: [Agreements]
+      summary: Queue contract generation for an active agreement
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '202':
+          description: Generation queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractQueueResponse'
+        '400':
+          description: Invalid status
+        '403':
+          description: Not authorized
+        '404':
+          description: Not found
+  /api/agreements/{id}/contract:
+    put:
+      tags: [Agreements]
+      summary: Attach generated contract metadata (lender only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractUpdateRequest'
+      responses:
+        '200':
+          description: Contract metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+        '400':
+          description: Invalid payload
+        '403':
+          description: Only lender can update
+        '404':
+          description: Not found
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications for the current user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            description: Filter by status (unread, read, archived)
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Notifications with paging info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationList'
+        '401':
+          description: Unauthorized
+  /api/notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notification count
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count:
+                    type: integer
+        '401':
+          description: Unauthorized
+  /api/notifications/{id}:
+    get:
+      tags: [Notifications]
+      summary: Get notification by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Notification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '403':
+          description: Not authorized to view
+        '404':
+          description: Not found
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
+        '403':
+          description: Not authorized
+        '404':
+          description: Not found
+  /api/notifications/{id}/read:
+    post:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400':
+          description: Already read
+        '403':
+          description: Not authorized
+        '404':
+          description: Not found
+  /api/notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all unread notifications as read
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Updated count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  updated_count:
+                    type: integer
+        '401':
+          description: Unauthorized
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 6
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    AuthToken:
+      type: object
+      properties:
+        token:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        state:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          description: lend or borrow
+        author_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    PostCreate:
+      type: object
+      required: [title, content, type]
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          description: lend or borrow
+    Agreement:
+      type: object
+      properties:
+        id:
+          type: integer
+        lender_id:
+          type: integer
+        borrower_id:
+          type: integer
+        post_id:
+          type: integer
+        principal_amount:
+          type: number
+          format: float
+        interest_rate:
+          type: number
+          format: float
+        total_amount:
+          type: number
+          format: float
+        currency:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        accepted_at:
+          type: string
+          format: date-time
+          nullable: true
+        disbursed_at:
+          type: string
+          format: date-time
+          nullable: true
+        start_date:
+          type: string
+          format: date-time
+          nullable: true
+        due_date:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        payment_frequency:
+          type: string
+          enum: [one_time, weekly, biweekly, monthly]
+        number_of_payments:
+          type: integer
+        status:
+          type: string
+        contract_url:
+          type: string
+          nullable: true
+        contract_hash:
+          type: string
+          nullable: true
+    AgreementCreate:
+      type: object
+      required:
+        - post_id
+        - principal_amount
+        - interest_rate
+        - due_date
+        - payment_frequency
+        - number_of_payments
+      properties:
+        post_id:
+          type: integer
+        principal_amount:
+          type: number
+          format: float
+        interest_rate:
+          type: number
+          format: float
+        due_date:
+          type: string
+          format: date
+        payment_frequency:
+          type: string
+          enum: [one_time, weekly, biweekly, monthly]
+        number_of_payments:
+          type: integer
+    ContractUpdateRequest:
+      type: object
+      required: [contract_url, contract_hash]
+      properties:
+        contract_url:
+          type: string
+          format: uri
+        contract_hash:
+          type: string
+    ContractQueueResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: queued
+        agreementID:
+          type: string
+        message:
+          type: string
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        type:
+          type: string
+          enum:
+            - agreement_created
+            - agreement_accepted
+            - agreement_cancelled
+            - payment_reminder
+            - payment_overdue
+            - agreement_completed
+        title:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+          enum: [unread, read, archived]
+        agreement_id:
+          type: integer
+          nullable: true
+        metadata:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+    NotificationList:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        unread_count:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
