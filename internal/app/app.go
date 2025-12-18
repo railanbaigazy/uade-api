@@ -30,8 +30,9 @@ func (a *App) SetupRoutes() *http.ServeMux {
 	authHandler := handlers.NewAuthHandler(a.DB, a.Cfg)
 	userHandler := handlers.NewUserHandler(a.DB)
 	postHandler := handlers.NewPostHandler(a.DB)
+	notificationHandler := handlers.NewNotificationHandler(a.DB)
 
-	agreementHandler := handlers.NewAgreementHandler(a.DB, a.Publisher)
+	agreementHandler := handlers.NewAgreementHandler(a.DB, a.Publisher, a.Publisher)
 
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
@@ -50,6 +51,13 @@ func (a *App) SetupRoutes() *http.ServeMux {
 	mux.Handle("POST /api/agreements/{id}/cancel", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.Cancel)))
 	mux.Handle("POST /api/agreements/{id}/contract/generate", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.GenerateContract)))
 	mux.Handle("PUT /api/agreements/{id}/contract", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(agreementHandler.UpdateContract)))
+
+	mux.Handle("GET /api/notifications", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.GetUserNotifications)))
+	mux.Handle("GET /api/notifications/unread-count", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.GetUnreadCount)))
+	mux.Handle("GET /api/notifications/{id}", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.GetByID)))
+	mux.Handle("POST /api/notifications/{id}/read", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.MarkAsRead)))
+	mux.Handle("POST /api/notifications/read-all", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.MarkAllAsRead)))
+	mux.Handle("DELETE /api/notifications/{id}", middleware.JWTAuth(a.Cfg.JWTSecret, http.HandlerFunc(notificationHandler.Delete)))
 
 	return mux
 }

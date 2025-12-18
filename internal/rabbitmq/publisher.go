@@ -22,6 +22,15 @@ type GenerateContractMessage struct {
 	AgreementID string `json:"agreement_id"`
 }
 
+type NotificationEvent struct {
+	Type        string                 `json:"type"`
+	UserID      int64                  `json:"user_id"`
+	Title       string                 `json:"title"`
+	Message     string                 `json:"message"`
+	AgreementID *int                   `json:"agreement_id,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
 func (p *Publisher) PublishGenerateContract(ctx context.Context, agreementID string) error {
 	body, err := json.Marshal(GenerateContractMessage{AgreementID: agreementID})
 	if err != nil {
@@ -52,4 +61,64 @@ func (p *Publisher) PublishGenerateContract(ctx context.Context, agreementID str
 	observability.MQPublishTotal.WithLabelValues(ExchangeAgreements, RoutingGenerateContract, "ok").Inc()
 	log.Printf("mq publish ok: agreement_id=%s exchange=%s key=%s", agreementID, ExchangeAgreements, RoutingGenerateContract)
 	return nil
+}
+
+func (p *Publisher) PublishAgreementAccepted(ctx context.Context, event interface{}) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal notification event: %w", err)
+	}
+
+	return p.ch.PublishWithContext(
+		ctx,
+		ExchangeNotifications,
+		RoutingAgreementAccepted,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			DeliveryMode: amqp.Persistent,
+			Body:         body,
+		},
+	)
+}
+
+func (p *Publisher) PublishPaymentReminder(ctx context.Context, event interface{}) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal notification event: %w", err)
+	}
+
+	return p.ch.PublishWithContext(
+		ctx,
+		ExchangeNotifications,
+		RoutingPaymentReminder,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			DeliveryMode: amqp.Persistent,
+			Body:         body,
+		},
+	)
+}
+
+func (p *Publisher) PublishNotification(ctx context.Context, routingKey string, event interface{}) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal notification event: %w", err)
+	}
+
+	return p.ch.PublishWithContext(
+		ctx,
+		ExchangeNotifications,
+		routingKey,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			DeliveryMode: amqp.Persistent,
+			Body:         body,
+		},
+	)
 }
