@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -14,13 +15,22 @@ import (
 	"github.com/railanbaigazy/uade-api/internal/utils"
 )
 
+type ContractPublisher interface {
+	PublishGenerateContract(ctx context.Context, agreementID string) error
+}
+
 type AgreementHandler struct {
 	DB                *sqlx.DB
 	ContractGenerator *contracts.Generator
+	Publisher         ContractPublisher
 }
 
-func NewAgreementHandler(db *sqlx.DB) *AgreementHandler {
-	return &AgreementHandler{DB: db, ContractGenerator: contracts.NewGenerator("contracts")}
+func NewAgreementHandler(db *sqlx.DB, pub ContractPublisher) *AgreementHandler {
+	return &AgreementHandler{
+		DB:                db,
+		ContractGenerator: contracts.NewGenerator("contracts"),
+		Publisher:         pub,
+	}
 }
 
 func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +85,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "invalid due_date format, use YYYY-MM-DD", http.StatusBadRequest)
 		return
 	}
-
 	if dueDate.Before(time.Now()) {
 		utils.WriteJSONError(w, "due_date must be in the future", http.StatusBadRequest)
 		return
@@ -94,7 +103,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 			utils.WriteJSONError(w, "post not found", http.StatusNotFound)
 			return
 		}
-
 		utils.WriteJSONError(w, "failed to fetch post", http.StatusInternalServerError)
 		return
 	}
@@ -103,7 +111,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "can only create agreements for lend posts", http.StatusBadRequest)
 		return
 	}
-
 	if int64(post.AuthorID) == borrowerID {
 		utils.WriteJSONError(w, "cannot create agreement with your own post", http.StatusBadRequest)
 		return
@@ -147,7 +154,6 @@ func (h *AgreementHandler) Create(w http.ResponseWriter, r *http.Request) {
 	agreement.Status = "pending"
 
 	w.WriteHeader(http.StatusCreated)
-
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 	}
@@ -223,7 +229,6 @@ func (h *AgreementHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 			utils.WriteJSONError(w, "agreement not found", http.StatusNotFound)
 			return
 		}
-
 		utils.WriteJSONError(w, "failed to fetch agreement", http.StatusInternalServerError)
 		return
 	}
@@ -258,7 +263,6 @@ func (h *AgreementHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "only lender can accept the agreement", http.StatusForbidden)
 		return
 	}
-
 	if agreement.Status != "pending" {
 		utils.WriteJSONError(w, "can only accept pending agreements", http.StatusBadRequest)
 		return
@@ -305,7 +309,6 @@ func (h *AgreementHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSONError(w, "not authorized to cancel this agreement", http.StatusForbidden)
 		return
 	}
-
 	if agreement.Status != "pending" {
 		utils.WriteJSONError(w, "can only cancel pending agreements", http.StatusBadRequest)
 		return
@@ -318,7 +321,6 @@ func (h *AgreementHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agreement.Status = "cancelled"
-
 	if err := json.NewEncoder(w).Encode(agreement); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 	}
@@ -401,37 +403,25 @@ func (h *AgreementHandler) GenerateContract(w http.ResponseWriter, r *http.Reque
 		utils.WriteJSONError(w, "not authorized to generate contract for this agreement", http.StatusForbidden)
 		return
 	}
-
 	if agreement.Status != "active" {
 		utils.WriteJSONError(w, "contract generation is available only for active agreements", http.StatusBadRequest)
 		return
 	}
 
-	gen := h.ContractGenerator
-	if gen == nil {
-		gen = contracts.NewGenerator("contracts")
-	}
-
-	contractURL, contractHash, err := gen.Generate(r.Context(), &agreement)
-	if err != nil {
-		utils.WriteJSONError(w, "failed to generate contract", http.StatusInternalServerError)
+	if h.Publisher == nil {
+		utils.WriteJSONError(w, "publisher not configured", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = h.DB.Exec(`
-		UPDATE agreements 
-		SET contract_url = $1, contract_hash = $2
-		WHERE id = $3
-	`, contractURL, contractHash, id)
-	if err != nil {
-		utils.WriteJSONError(w, "failed to persist contract metadata", http.StatusInternalServerError)
+	if err := h.Publisher.PublishGenerateContract(r.Context(), id); err != nil {
+		utils.WriteJSONError(w, "failed to enqueue contract generation", http.StatusInternalServerError)
 		return
 	}
 
-	agreement.ContractURL = &contractURL
-	agreement.ContractHash = &contractHash
-
-	if err := json.NewEncoder(w).Encode(agreement); err != nil {
-		http.Error(w, "Failed to write response", http.StatusInternalServerError)
-	}
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":      "queued",
+		"agreementID": id,
+		"message":     "contract generation requested",
+	})
 }

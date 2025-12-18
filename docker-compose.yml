@@ -10,8 +10,13 @@ services:
     environment:
       - DATABASE_URL=postgres://user:password@db:5432/uade?sslmode=disable
       - JWT_SECRET=test-secret
+      - APP_ENV=development
+      - PORT=8080
+      - AMQP_URL=amqp://guest:guest@rabbitmq:5672/
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   db:
@@ -25,7 +30,37 @@ services:
     ports:
       - "5430:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d uade"]
+      test: [ "CMD-SHELL", "pg_isready -U user -d uade" ]
       interval: 5s
       timeout: 3s
       retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: uade-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: [ "CMD-SHELL", "rabbitmq-diagnostics -q ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  worker:
+    build: .
+    volumes:
+      - .:/app
+    command: go run ./cmd/worker
+    container_name: uade-worker
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/uade?sslmode=disable
+      - JWT_SECRET=test-secret
+      - APP_ENV=development
+      - AMQP_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy

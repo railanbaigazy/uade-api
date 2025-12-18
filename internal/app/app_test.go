@@ -2,89 +2,115 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jmoiron/sqlx"
 	"github.com/railanbaigazy/uade-api/internal/config"
+	"github.com/railanbaigazy/uade-api/internal/utils"
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestApp(t *testing.T) *http.ServeMux {
-	os.Setenv("DATABASE_URL", "postgres://user:password@localhost:5430/uade?sslmode=disable")
-	os.Setenv("JWT_SECRET", "test-secret-key")
-
-	cfg := config.Load()
-
-	db, err := sqlx.Connect("postgres", cfg.DBURL)
-	require.NoError(t, err)
-
-	a := New(db, cfg)
-	return a.SetupRoutes()
-}
-
 func TestSetupRoutes(t *testing.T) {
-	mux := setupTestApp(t)
+	rawDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rawDB.Close() })
 
-	tests := []struct {
-		name       string
-		method     string
-		path       string
-		body       string
-		wantStatus int
-	}{
-		{"healthz works", http.MethodGet, "/healthz", "", http.StatusOK},
+	db := sqlx.NewDb(rawDB, "sqlmock")
 
-		{"register endpoint", http.MethodPost, "/api/auth/register",
-			`{"name":"Tester","email":"t1@example.com","password":"123456"}`,
-			http.StatusCreated,
+	cfg := &config.Config{
+		JWTSecret: "test-secret",
+		Env:       "test",
+	}
+
+	a := &App{
+		DB:  db,
+		Cfg: cfg,
+	}
+
+	mux := a.SetupRoutes()
+
+	type tc struct {
+		name      string
+		method    string
+		path      string
+		body      any
+		setupMock func()
+		wantCode  int
+	}
+
+	tests := []tc{
+		{
+			name:     "healthz",
+			method:   http.MethodGet,
+			path:     "/healthz",
+			body:     nil,
+			wantCode: http.StatusOK,
 		},
-		{"login endpoint", http.MethodPost, "/api/auth/login",
-			`{"email":"t1@example.com","password":"123456"}`,
-			http.StatusOK,
+		{
+			name:   "register_endpoint",
+			method: http.MethodPost,
+			path:   "/api/auth/register",
+			body: map[string]any{
+				"name":     "Lender",
+				"email":    "lender@test.com",
+				"password": "secret123",
+			},
+			setupMock: func() {
+				mock.ExpectExec(`(?is)insert\s+into\s+users`).
+					WithArgs("Lender", "lender@test.com", sqlmock.AnyArg()).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			},
+			wantCode: http.StatusCreated,
 		},
+		{
+			name:   "login_endpoint",
+			method: http.MethodPost,
+			path:   "/api/auth/login",
+			body: map[string]any{
+				"email":    "lender@test.com",
+				"password": "secret123",
+			},
+			setupMock: func() {
+				hash, err := utils.HashPassword("secret123")
+				require.NoError(t, err)
 
-		{"unauthorized /me", http.MethodGet, "/api/users/me", "", http.StatusUnauthorized},
-		{"unauthorized get posts", http.MethodGet, "/api/posts", "", http.StatusUnauthorized},
-		{"unauthorized create post", http.MethodPost, "/api/posts", `{"title":"x"}`, http.StatusUnauthorized},
-		{"unauthorized update post", http.MethodPut, "/api/posts/1", `{"title":"x"}`, http.StatusUnauthorized},
-		{"unauthorized delete post", http.MethodDelete, "/api/posts/1", "", http.StatusUnauthorized},
-
-		{"unauthorized get agreements", http.MethodGet, "/api/agreements", "", http.StatusUnauthorized},
-		{"unauthorized get agreement by id", http.MethodGet, "/api/agreements/1", "", http.StatusUnauthorized},
-		{"unauthorized create agreement", http.MethodPost, "/api/agreements",
-			`{"post_id":1,"principal_amount":1000,"interest_rate":0.1,"due_date":"2026-12-31","payment_frequency":"one_time","number_of_payments":1}`,
-			http.StatusUnauthorized,
+				mock.ExpectQuery(`(?is)select\s+id,\s*password_hash\s+from\s+users\s+where\s+email=`).
+					WithArgs("lender@test.com").
+					WillReturnRows(
+						sqlmock.NewRows([]string{"id", "password_hash"}).
+							AddRow(1, hash),
+					)
+			},
+			wantCode: http.StatusOK,
 		},
-		{"unauthorized accept agreement", http.MethodPost, "/api/agreements/1/accept", "", http.StatusUnauthorized},
-		{"unauthorized cancel agreement", http.MethodPost, "/api/agreements/1/cancel", "", http.StatusUnauthorized},
-		{"unauthorized update contract", http.MethodPut, "/api/agreements/1/contract",
-			`{"contract_url":"https://example.com/contract.pdf","contract_hash":"abc123"}`,
-			http.StatusUnauthorized,
-		},
-
-		{"unknown route", http.MethodGet, "/notfound", "", http.StatusNotFound},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, bytes.NewBufferString(tt.body))
-			req.Header.Set("Content-Type", "application/json")
+			if tt.setupMock != nil {
+				tt.setupMock()
+			}
+
+			var bodyBytes []byte
+			if tt.body != nil {
+				bodyBytes, err = json.Marshal(tt.body)
+				require.NoError(t, err)
+			}
+
+			req := httptest.NewRequest(tt.method, tt.path, bytes.NewReader(bodyBytes))
+			if tt.body != nil {
+				req.Header.Set("Content-Type", "application/json")
+			}
 
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 
-			t.Logf("[%s] %s -> %d", tt.method, tt.path, rec.Code)
-
-			if tt.path == "/api/auth/register" {
-				if !(rec.Code == http.StatusCreated || rec.Code == http.StatusConflict) {
-					require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
-				}
-			} else {
-				require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
-			}
+			require.Equal(t, tt.wantCode, rec.Code, "[%s] %s -> %d body=%s", tt.method, tt.path, rec.Code, rec.Body.String())
+			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }

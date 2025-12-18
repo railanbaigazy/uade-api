@@ -7,15 +7,17 @@ import (
 	"github.com/railanbaigazy/uade-api/internal/app/middleware"
 	"github.com/railanbaigazy/uade-api/internal/config"
 	"github.com/railanbaigazy/uade-api/internal/handlers"
+	"github.com/railanbaigazy/uade-api/internal/rabbitmq"
 )
 
 type App struct {
-	DB  *sqlx.DB
-	Cfg *config.Config
+	DB        *sqlx.DB
+	Cfg       *config.Config
+	Publisher *rabbitmq.Publisher
 }
 
-func New(db *sqlx.DB, cfg *config.Config) *App {
-	return &App{DB: db, Cfg: cfg}
+func New(db *sqlx.DB, cfg *config.Config, pub *rabbitmq.Publisher) *App {
+	return &App{DB: db, Cfg: cfg, Publisher: pub}
 }
 
 func (a *App) SetupRoutes() *http.ServeMux {
@@ -26,7 +28,8 @@ func (a *App) SetupRoutes() *http.ServeMux {
 	authHandler := handlers.NewAuthHandler(a.DB, a.Cfg)
 	userHandler := handlers.NewUserHandler(a.DB)
 	postHandler := handlers.NewPostHandler(a.DB)
-	agreementHandler := handlers.NewAgreementHandler(a.DB)
+
+	agreementHandler := handlers.NewAgreementHandler(a.DB, a.Publisher)
 
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
