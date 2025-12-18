@@ -61,7 +61,7 @@ func (g *Generator) Generate(_ context.Context, agreement *models.Agreement) (st
 
 func (g *Generator) buildKazakhSection(a *models.Agreement) string {
 	return fmt.Sprintf(
-		"Қарыз шарты #%d\nБеруші (ID: %d)\nАлатын (ID: %d)\nНегізгі сома: %.2f %s\nСыйақы мөлшері: %.2f\nҚайтару сомасы: %.2f %s\nӨтеу күні: %s\nКелісім мерзімі: %s",
+		"Қарыз шарты #%d\nБеруші (ID: %d)\nАлатын (ID: %d)\nНегізгі сома: %.2f %s\nСыйақы мөлшері: %.2f\nҚайтару сомасы: %.2f %s\nӨтеу күні: %s\nКелісім мерзімі: %s\nҚол қойылды",
 		a.ID, a.LenderID, a.BorrowerID, a.PrincipalAmount, a.Currency, a.InterestRate, a.TotalAmount, a.Currency,
 		a.DueDate.Format("2006-01-02"), g.formatStartDate(a.StartDate),
 	)
@@ -69,7 +69,7 @@ func (g *Generator) buildKazakhSection(a *models.Agreement) string {
 
 func (g *Generator) buildRussianSection(a *models.Agreement) string {
 	return fmt.Sprintf(
-		"Договор займа #%d\nЗаймодавец (ID: %d)\nЗаемщик (ID: %d)\nОсновная сумма: %.2f %s\nСтавка: %.2f\nИтого к возврату: %.2f %s\nСрок возврата: %s\nДата начала: %s",
+		"Договор займа #%d\nЗаймодавец (ID: %d)\nЗаемщик (ID: %d)\nОсновная сумма: %.2f %s\nСтавка: %.2f\nИтого к возврату: %.2f %s\nСрок возврата: %s\nДата начала: %s\nПодписано",
 		a.ID, a.LenderID, a.BorrowerID, a.PrincipalAmount, a.Currency, a.InterestRate, a.TotalAmount, a.Currency,
 		a.DueDate.Format("2006-01-02"), g.formatStartDate(a.StartDate),
 	)
