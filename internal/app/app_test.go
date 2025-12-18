@@ -15,7 +15,6 @@ import (
 )
 
 func TestSetupRoutes(t *testing.T) {
-	// sqlmock DB
 	rawDB, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rawDB.Close() })
@@ -30,7 +29,6 @@ func TestSetupRoutes(t *testing.T) {
 	a := &App{
 		DB:  db,
 		Cfg: cfg,
-		// Publisher: nil, // если у тебя появится поле Publisher в App — оставь nil
 	}
 
 	mux := a.SetupRoutes()
@@ -62,7 +60,6 @@ func TestSetupRoutes(t *testing.T) {
 				"password": "secret123",
 			},
 			setupMock: func() {
-				// Register делает Exec(INSERT INTO users ...)
 				mock.ExpectExec(`(?is)insert\s+into\s+users`).
 					WithArgs("Lender", "lender@test.com", sqlmock.AnyArg()).
 					WillReturnResult(sqlmock.NewResult(1, 1))
