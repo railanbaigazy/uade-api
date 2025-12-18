@@ -1,4 +1,5 @@
 package cron
+
 import (
 	"context"
 	"fmt"
@@ -7,9 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/robfig/cron/v3"
 	"github.com/railanbaigazy/uade-api/internal/app/models"
+	"github.com/robfig/cron/v3"
 )
+
 type DBInterface interface {
 	Select(dest interface{}, query string, args ...interface{}) error
 }
@@ -66,7 +68,7 @@ func (c *CronService) CheckAgreements() error {
 		FROM agreements
 		WHERE status = 'active' AND due_date <= $1
 	`
-	dueSoon := time.Now().Add(72 * time.Hour) 
+	dueSoon := time.Now().Add(72 * time.Hour)
 	agreements := []models.Agreement{}
 
 	if err := c.DB.Select(&agreements, query, dueSoon); err != nil {
