@@ -13,6 +13,8 @@ require (
 
 require github.com/jung-kurt/gofpdf v1.16.2
 
+require github.com/rabbitmq/amqp091-go v1.10.0
+
 require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rabbitmq/amqp091-go v1.10.0
