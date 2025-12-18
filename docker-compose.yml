@@ -54,7 +54,10 @@ services:
       - .:/app
     command: go run ./cmd/worker
     container_name: uade-worker
+    ports:
+      - "9091:9091"
     environment:
+      - WORKER_METRICS_PORT=9091
       - DATABASE_URL=postgres://user:password@db:5432/uade?sslmode=disable
       - JWT_SECRET=test-secret
       - APP_ENV=development

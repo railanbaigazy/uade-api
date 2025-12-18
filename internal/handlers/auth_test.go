@@ -28,7 +28,6 @@ func TestRegisterAndLogin_SQLMock(t *testing.T) {
 	cfg := &config.Config{JWTSecret: "test-secret"}
 	h := NewAuthHandler(db, cfg)
 
-	// Expect Exec for INSERT during Register. We don't know the hashed password value
 	mock.ExpectExec("INSERT INTO users").WithArgs("TestUser", "user@example.com", sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 
 	// Register
