@@ -13,7 +13,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/railanbaigazy/uade-api/internal/app/models"
-	"github.com/railanbaigazy/uade-api/internal/contracts"
 	"github.com/railanbaigazy/uade-api/internal/observability"
 	"github.com/railanbaigazy/uade-api/internal/rabbitmq"
 )
@@ -21,11 +20,15 @@ import (
 type ContractConsumer struct {
 	db  *sqlx.DB
 	ch  *amqp.Channel
-	gen *contracts.Generator
+	gen ContractGenerator
 }
 
-func NewContractConsumer(db *sqlx.DB, ch *amqp.Channel, gen *contracts.Generator) *ContractConsumer {
+func NewContractConsumer(db *sqlx.DB, ch *amqp.Channel, gen ContractGenerator) *ContractConsumer {
 	return &ContractConsumer{db: db, ch: ch, gen: gen}
+}
+
+type ContractGenerator interface {
+	Generate(ctx context.Context, agreement *models.Agreement) (string, string, error)
 }
 
 type generateMsg struct {

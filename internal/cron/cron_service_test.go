@@ -46,6 +46,59 @@ func TestCheckAgreements(t *testing.T) {
 	}
 }
 
+type failingDB struct{}
+
+var errDBFailure = errors.New("boom")
+
+func (f *failingDB) Select(dest interface{}, query string, args ...interface{}) error {
+	return errDBFailure
+}
+
+type flakyPublisher struct {
+	failOn string
+	calls  int
+}
+
+func (f *flakyPublisher) PublishGenerateContract(ctx context.Context, agreementID string) error {
+	f.calls++
+	if agreementID == f.failOn {
+		return errors.New("publish error")
+	}
+	return nil
+}
+
+func TestCheckAgreements_Errors(t *testing.T) {
+	t.Run("db failure bubbles", func(t *testing.T) {
+		cronService := &CronService{
+			DB:        &failingDB{},
+			Publisher: &DummyPublisher{},
+		}
+
+		err := cronService.CheckAgreements()
+		if !errors.Is(err, errDBFailure) {
+			t.Fatalf("expected db error, got %v", err)
+		}
+	})
+
+	t.Run("publish errors are skipped", func(t *testing.T) {
+		db := &DummyDB{}
+		pub := &flakyPublisher{failOn: "2"}
+
+		cronService := &CronService{
+			DB:        db,
+			Publisher: pub,
+		}
+
+		err := cronService.CheckAgreements()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if pub.calls != 2 {
+			t.Fatalf("expected 2 publish attempts, got %d", pub.calls)
+		}
+	})
+}
+
 func TestCleanupPDFs(t *testing.T) {
 	cronService := &CronService{PDFPath: "./test_tmp_pdf"}
 
